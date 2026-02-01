@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import dev.nutting.kexplore.data.kubernetes.KubernetesRepository
 import dev.nutting.kexplore.data.model.ContentState
 import dev.nutting.kexplore.data.model.ResourceCategory
+import dev.nutting.kexplore.data.model.ResourceStatus
 import dev.nutting.kexplore.data.model.ResourceSummary
 import dev.nutting.kexplore.data.model.ResourceType
 import dev.nutting.kexplore.ui.components.ContentStateHost
@@ -43,6 +44,8 @@ fun ResourceListScreen(
     var selectedType by remember(category) { mutableStateOf(types.first()) }
     var resources by remember { mutableStateOf<ContentState<List<ResourceSummary>>>(ContentState.Loading) }
     var searchQuery by remember { mutableStateOf("") }
+    var statusFilters by remember { mutableStateOf(emptySet<ResourceStatus>()) }
+    var labelFilter by remember { mutableStateOf("") }
     var isRefreshing by remember { mutableStateOf(false) }
     var refreshTrigger by remember { mutableIntStateOf(0) }
 
@@ -86,6 +89,16 @@ fun ResourceListScreen(
         SearchFilterBar(
             query = searchQuery,
             onQueryChange = { searchQuery = it },
+            statusFilters = statusFilters,
+            onStatusFilterToggle = { status ->
+                statusFilters = if (status in statusFilters) {
+                    statusFilters - status
+                } else {
+                    statusFilters + status
+                }
+            },
+            labelFilter = labelFilter,
+            onLabelFilterChange = { labelFilter = it },
         )
 
         PullToRefreshBox(
@@ -103,8 +116,30 @@ fun ResourceListScreen(
                     refreshTrigger++
                 },
             ) { items ->
-                val filtered = if (searchQuery.isBlank()) items else {
-                    items.filter { it.name.contains(searchQuery, ignoreCase = true) }
+                val filtered = items.filter { summary ->
+                    // Name search
+                    val matchesName = searchQuery.isBlank() ||
+                        summary.name.contains(searchQuery, ignoreCase = true)
+                    // Status filter
+                    val matchesStatus = statusFilters.isEmpty() ||
+                        summary.status in statusFilters
+                    // Label filter (key=value matching)
+                    val matchesLabel = labelFilter.isBlank() || run {
+                        val parts = labelFilter.split("=", limit = 2)
+                        if (parts.size == 2) {
+                            val (key, value) = parts
+                            summary.labels.any { (k, v) ->
+                                k.contains(key, ignoreCase = true) &&
+                                    v.contains(value, ignoreCase = true)
+                            }
+                        } else {
+                            summary.labels.any { (k, v) ->
+                                k.contains(labelFilter, ignoreCase = true) ||
+                                    v.contains(labelFilter, ignoreCase = true)
+                            }
+                        }
+                    }
+                    matchesName && matchesStatus && matchesLabel
                 }
                 if (filtered.isEmpty()) {
                     EmptyContent(message = "No ${selectedType.pluralName} found")
