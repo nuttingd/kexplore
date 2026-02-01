@@ -5,11 +5,16 @@ import dev.nutting.kexplore.data.model.ResourceSummary
 import dev.nutting.kexplore.data.model.ResourceType
 import io.fabric8.kubernetes.api.model.HasMetadata
 import io.fabric8.kubernetes.client.KubernetesClient
+import io.fabric8.kubernetes.client.dsl.ExecWatch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
+import java.io.Closeable
+import java.io.OutputStream
+import java.io.PipedInputStream
+import java.io.PipedOutputStream
 
 class KubernetesRepository(private val client: KubernetesClient) {
 
@@ -131,5 +136,47 @@ class KubernetesRepository(private val client: KubernetesClient) {
                 append(stderr)
             }
         }
+    }
+
+    suspend fun execInteractive(
+        namespace: String,
+        podName: String,
+        container: String?,
+    ): ExecSession = withContext(Dispatchers.IO) {
+        val stdoutPipe = PipedInputStream()
+        val stdoutOutput = PipedOutputStream().also { stdoutPipe.connect(it) }
+        val stderrPipe = PipedInputStream()
+        val stderrOutput = PipedOutputStream().also { stderrPipe.connect(it) }
+
+        val watch = client.pods()
+            .inNamespace(namespace)
+            .withName(podName)
+            .let { op -> if (container != null) op.inContainer(container) else op }
+            .redirectingInput()
+            .writingOutput(stdoutOutput)
+            .writingError(stderrOutput)
+            .withTTY()
+            .exec("/bin/sh")
+
+        ExecSession(
+            stdin = watch.input,
+            stdout = stdoutPipe,
+            stderr = stderrPipe,
+            watch = watch,
+        )
+    }
+}
+
+class ExecSession(
+    val stdin: OutputStream,
+    val stdout: PipedInputStream,
+    val stderr: PipedInputStream,
+    val watch: ExecWatch,
+) : Closeable {
+    override fun close() {
+        try { stdin.close() } catch (_: Exception) {}
+        try { stdout.close() } catch (_: Exception) {}
+        try { stderr.close() } catch (_: Exception) {}
+        try { watch.close() } catch (_: Exception) {}
     }
 }
