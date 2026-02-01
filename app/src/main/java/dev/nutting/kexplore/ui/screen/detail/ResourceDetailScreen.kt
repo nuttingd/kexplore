@@ -34,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import dev.nutting.kexplore.data.kubernetes.KubernetesRepository
+import dev.nutting.kexplore.data.kubernetes.MetricsRepository
 import dev.nutting.kexplore.data.model.ContainerInfo
 import dev.nutting.kexplore.data.model.ContentState
 import dev.nutting.kexplore.data.model.ResourceDetail
@@ -49,6 +50,7 @@ import dev.nutting.kexplore.util.ErrorMapper
 @Composable
 fun ResourceDetailScreen(
     repository: KubernetesRepository?,
+    metricsRepository: MetricsRepository? = null,
     namespace: String,
     resourceType: ResourceType,
     resourceName: String,
@@ -61,9 +63,13 @@ fun ResourceDetailScreen(
     var yaml by remember { mutableStateOf<ContentState<String>>(ContentState.Loading) }
     var selectedTab by remember { mutableIntStateOf(0) }
 
+    val hasMetrics = resourceType == ResourceType.Pod || resourceType == ResourceType.Node
     val tabs = buildList {
         add("Overview")
         add("YAML")
+        if (hasMetrics) {
+            add("Metrics")
+        }
         if (resourceType == ResourceType.Pod) {
             add("Logs")
             add("Exec")
@@ -111,16 +117,22 @@ fun ResourceDetailScreen(
                 }
             }
 
-            when (selectedTab) {
-                0 -> OverviewTab(detail = detail, resourceType = resourceType)
-                1 -> YamlTab(yaml = yaml)
-                2 -> PodLogsScreen(
+            when (tabs.getOrNull(selectedTab)) {
+                "Overview" -> OverviewTab(detail = detail, resourceType = resourceType)
+                "YAML" -> YamlTab(yaml = yaml)
+                "Metrics" -> MetricsTab(
+                    metricsRepository = metricsRepository,
+                    namespace = namespace,
+                    resourceName = resourceName,
+                    resourceType = resourceType,
+                )
+                "Logs" -> PodLogsScreen(
                     repository = repository,
                     namespace = namespace,
                     podName = resourceName,
                     embedded = true,
                 )
-                3 -> ExecTab(onExec = { container ->
+                "Exec" -> ExecTab(onExec = { container ->
                     onExec(container)
                 }, detail = detail)
             }

@@ -7,6 +7,7 @@ import dev.nutting.kexplore.data.connection.ClusterConnection
 import dev.nutting.kexplore.data.connection.ConnectionStore
 import dev.nutting.kexplore.data.kubernetes.KubernetesClientFactory
 import dev.nutting.kexplore.data.kubernetes.KubernetesRepository
+import dev.nutting.kexplore.data.kubernetes.MetricsRepository
 import dev.nutting.kexplore.data.model.ContentState
 import dev.nutting.kexplore.ui.navigation.BottomTab
 import dev.nutting.kexplore.util.ErrorMapper
@@ -39,6 +40,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var client: KubernetesClient? = null
     private var _repository: KubernetesRepository? = null
     val repository: KubernetesRepository? get() = _repository
+
+    private var _metricsRepository: MetricsRepository? = null
+    val metricsRepository: MetricsRepository? get() = _metricsRepository
 
     init {
         loadConnections()
@@ -75,6 +79,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 client?.close()
                 client = newClient
                 _repository = KubernetesRepository(newClient)
+                _metricsRepository = MetricsRepository(newClient)
 
                 val namespaces = withContext(Dispatchers.IO) {
                     newClient.namespaces().list().items.map { it.metadata.name }

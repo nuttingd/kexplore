@@ -118,6 +118,9 @@ dependencies {
     // Serialization
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
 
+    // Charts (Vico)
+    implementation("com.patrykandpatrick.vico:compose-m3:2.1.0")
+
     debugImplementation("androidx.compose.ui:ui-tooling")
 
     androidTestImplementation(composeBom)

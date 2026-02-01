@@ -31,8 +31,12 @@ object Routes {
     const val POD_LOGS = "logs/{namespace}/{pod}"
     const val POD_EXEC = "exec/{namespace}/{pod}/{container}"
 
-    fun resourceDetail(namespace: String, kind: ResourceType, name: String): String =
-        "resource/$namespace/${kind.name}/$name"
+    const val CLUSTER_SCOPE_SENTINEL = "_cluster"
+
+    fun resourceDetail(namespace: String, kind: ResourceType, name: String): String {
+        val ns = if (kind.isClusterScoped) CLUSTER_SCOPE_SENTINEL else namespace
+        return "resource/$ns/${kind.name}/$name"
+    }
 
     fun podLogs(namespace: String, pod: String): String =
         "logs/$namespace/$pod"
@@ -125,6 +129,7 @@ fun AppNavGraph(
 
             ResourceDetailScreen(
                 repository = mainViewModel.repository,
+                metricsRepository = mainViewModel.metricsRepository,
                 namespace = namespace,
                 resourceType = kind,
                 resourceName = name,

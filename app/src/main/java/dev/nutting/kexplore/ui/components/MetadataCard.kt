@@ -43,7 +43,9 @@ fun MetadataCard(
                 StatusChip(status = status)
             }
             Spacer(Modifier.height(8.dp))
-            MetadataRow("Namespace", namespace)
+            if (namespace.isNotEmpty()) {
+                MetadataRow("Namespace", namespace)
+            }
             MetadataRow("UID", uid)
             MetadataRow("Created", creationTimestamp)
         }

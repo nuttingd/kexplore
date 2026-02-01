@@ -62,9 +62,13 @@ fun MainScreen(
                     title = {
                         Text(
                             viewModel.getActiveConnectionName()
-                                ?.let {
-                                    val ns = state.activeNamespace.ifEmpty { "All Namespaces" }
-                                    "$it / $ns"
+                                ?.let { clusterName ->
+                                    if (state.selectedTab == BottomTab.Cluster) {
+                                        "$clusterName / Cluster Resources"
+                                    } else {
+                                        val ns = state.activeNamespace.ifEmpty { "All Namespaces" }
+                                        "$clusterName / $ns"
+                                    }
                                 }
                                 ?: "Kexplore"
                         )

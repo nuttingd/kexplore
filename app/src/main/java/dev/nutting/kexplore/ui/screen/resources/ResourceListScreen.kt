@@ -49,8 +49,11 @@ fun ResourceListScreen(
     var isRefreshing by remember { mutableStateOf(false) }
     var refreshTrigger by remember { mutableIntStateOf(0) }
 
+    // Cluster-scoped resources ignore namespace; use empty string to signal "no namespace"
+    val effectiveNamespace = if (selectedType.isClusterScoped) "" else namespace
+
     // Load resources on type/namespace/connection change, or manual refresh
-    LaunchedEffect(selectedType, namespace, isConnected, refreshTrigger) {
+    LaunchedEffect(selectedType, effectiveNamespace, isConnected, refreshTrigger) {
         if (!isConnected || repository == null) {
             resources = if (connectionError != null) {
                 ContentState.Error(connectionError)
@@ -63,7 +66,7 @@ fun ResourceListScreen(
             resources = ContentState.Loading
         }
         resources = try {
-            ContentState.Success(repository.getResources(namespace, selectedType))
+            ContentState.Success(repository.getResources(effectiveNamespace, selectedType))
         } catch (e: Exception) {
             ContentState.Error(ErrorMapper.map(e))
         }
@@ -71,7 +74,7 @@ fun ResourceListScreen(
     }
 
     // Auto-refresh every 30s while screen is visible
-    LaunchedEffect(selectedType, namespace, isConnected) {
+    LaunchedEffect(selectedType, effectiveNamespace, isConnected) {
         if (!isConnected || repository == null) return@LaunchedEffect
         while (true) {
             delay(30_000)

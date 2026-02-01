@@ -8,16 +8,30 @@ import dev.nutting.kexplore.data.model.ResourceSummary
 import dev.nutting.kexplore.data.model.ResourceType
 import dev.nutting.kexplore.util.DateFormatter
 import io.fabric8.kubernetes.api.model.ConfigMap
+import io.fabric8.kubernetes.api.model.Endpoints
 import io.fabric8.kubernetes.api.model.HasMetadata
+import io.fabric8.kubernetes.api.model.LimitRange
+import io.fabric8.kubernetes.api.model.Namespace
+import io.fabric8.kubernetes.api.model.Node
+import io.fabric8.kubernetes.api.model.PersistentVolume
+import io.fabric8.kubernetes.api.model.PersistentVolumeClaim
 import io.fabric8.kubernetes.api.model.Pod
+import io.fabric8.kubernetes.api.model.ResourceQuota
 import io.fabric8.kubernetes.api.model.Secret
 import io.fabric8.kubernetes.api.model.Service
-import io.fabric8.kubernetes.api.model.apps.Deployment
 import io.fabric8.kubernetes.api.model.apps.DaemonSet
+import io.fabric8.kubernetes.api.model.apps.Deployment
 import io.fabric8.kubernetes.api.model.apps.ReplicaSet
 import io.fabric8.kubernetes.api.model.apps.StatefulSet
+import io.fabric8.kubernetes.api.model.autoscaling.v2.HorizontalPodAutoscaler
 import io.fabric8.kubernetes.api.model.batch.v1.CronJob
 import io.fabric8.kubernetes.api.model.batch.v1.Job
+import io.fabric8.kubernetes.api.model.networking.v1.NetworkPolicy
+import io.fabric8.kubernetes.api.model.rbac.ClusterRole
+import io.fabric8.kubernetes.api.model.rbac.ClusterRoleBinding
+import io.fabric8.kubernetes.api.model.rbac.Role
+import io.fabric8.kubernetes.api.model.rbac.RoleBinding
+import io.fabric8.kubernetes.api.model.storage.StorageClass
 
 object ResourceMappers {
 
@@ -87,6 +101,39 @@ object ResourceMappers {
                 else -> ResourceStatus.Pending
             }
         }
+        is Node -> {
+            val ready = resource.status?.conditions
+                ?.any { it.type == "Ready" && it.status == "True" } ?: false
+            if (ready) ResourceStatus.Running else ResourceStatus.Failed
+        }
+        is Namespace -> when (resource.status?.phase) {
+            "Active" -> ResourceStatus.Running
+            "Terminating" -> ResourceStatus.Terminating
+            else -> ResourceStatus.Unknown
+        }
+        is PersistentVolume -> when (resource.status?.phase) {
+            "Available" -> ResourceStatus.Running
+            "Bound" -> ResourceStatus.Running
+            "Released" -> ResourceStatus.Pending
+            "Failed" -> ResourceStatus.Failed
+            else -> ResourceStatus.Unknown
+        }
+        is PersistentVolumeClaim -> when (resource.status?.phase) {
+            "Bound" -> ResourceStatus.Running
+            "Pending" -> ResourceStatus.Pending
+            "Lost" -> ResourceStatus.Failed
+            else -> ResourceStatus.Unknown
+        }
+        is io.fabric8.kubernetes.api.model.Event -> when (resource.type) {
+            "Normal" -> ResourceStatus.Running
+            "Warning" -> ResourceStatus.Failed
+            else -> ResourceStatus.Unknown
+        }
+        is HorizontalPodAutoscaler -> {
+            val conditions = resource.status?.conditions
+            val active = conditions?.any { it.type == "ScalingActive" && it.status == "True" } ?: false
+            if (active) ResourceStatus.Running else ResourceStatus.Pending
+        }
         else -> ResourceStatus.Running
     }
 
@@ -116,6 +163,11 @@ object ResourceMappers {
             val desired = resource.status?.desiredNumberScheduled ?: 0
             "$ready/$desired"
         }
+        is HorizontalPodAutoscaler -> {
+            val current = resource.status?.currentReplicas ?: 0
+            val desired = resource.status?.desiredReplicas ?: 0
+            "$current/$desired"
+        }
         else -> null
     }
 
@@ -135,6 +187,33 @@ object ResourceMappers {
             )
         } ?: emptyList()
         is Deployment -> resource.status?.conditions?.map {
+            Condition(
+                type = it.type,
+                status = it.status,
+                reason = it.reason,
+                message = it.message,
+                lastTransitionTime = it.lastTransitionTime,
+            )
+        } ?: emptyList()
+        is Node -> resource.status?.conditions?.map {
+            Condition(
+                type = it.type,
+                status = it.status,
+                reason = it.reason,
+                message = it.message,
+                lastTransitionTime = it.lastTransitionTime,
+            )
+        } ?: emptyList()
+        is HorizontalPodAutoscaler -> resource.status?.conditions?.map {
+            Condition(
+                type = it.type,
+                status = it.status,
+                reason = it.reason,
+                message = it.message,
+                lastTransitionTime = it.lastTransitionTime,
+            )
+        } ?: emptyList()
+        is Namespace -> resource.status?.conditions?.map {
             Condition(
                 type = it.type,
                 status = it.status,
@@ -205,6 +284,156 @@ object ResourceMappers {
             put("Type", resource.type ?: "Opaque")
             resource.data?.keys?.forEach { key ->
                 put(key, "\u2022\u2022\u2022\u2022\u2022")
+            }
+        }
+        is Node -> buildMap {
+            val info = resource.status?.nodeInfo
+            put("OS", "${info?.operatingSystem ?: ""} ${info?.osImage ?: ""}")
+            put("Kernel", info?.kernelVersion ?: "")
+            put("Kubelet", info?.kubeletVersion ?: "")
+            put("Container Runtime", info?.containerRuntimeVersion ?: "")
+            put("Architecture", info?.architecture ?: "")
+            resource.status?.allocatable?.let { alloc ->
+                alloc["cpu"]?.let { put("Allocatable CPU", it.toString()) }
+                alloc["memory"]?.let { put("Allocatable Memory", it.toString()) }
+                alloc["pods"]?.let { put("Allocatable Pods", it.toString()) }
+            }
+            resource.status?.addresses?.let { addrs ->
+                addrs.forEach { addr ->
+                    put("${addr.type} Address", addr.address)
+                }
+            }
+        }
+        is Namespace -> buildMap {
+            put("Phase", resource.status?.phase ?: "")
+        }
+        is PersistentVolume -> buildMap {
+            put("Phase", resource.status?.phase ?: "")
+            resource.spec?.capacity?.get("storage")?.let { put("Capacity", it.toString()) }
+            resource.spec?.accessModes?.let { put("Access Modes", it.joinToString(", ")) }
+            put("Reclaim Policy", resource.spec?.persistentVolumeReclaimPolicy ?: "")
+            put("Storage Class", resource.spec?.storageClassName ?: "")
+            resource.spec?.claimRef?.let { ref ->
+                put("Claim", "${ref.namespace}/${ref.name}")
+            }
+        }
+        is PersistentVolumeClaim -> buildMap {
+            put("Phase", resource.status?.phase ?: "")
+            resource.status?.capacity?.get("storage")?.let { put("Capacity", it.toString()) }
+            resource.spec?.accessModes?.let { put("Access Modes", it.joinToString(", ")) }
+            put("Storage Class", resource.spec?.storageClassName ?: "")
+            put("Volume Name", resource.spec?.volumeName ?: "")
+        }
+        is StorageClass -> buildMap {
+            put("Provisioner", resource.provisioner ?: "")
+            put("Reclaim Policy", resource.reclaimPolicy ?: "")
+            put("Volume Binding Mode", resource.volumeBindingMode ?: "")
+            if (resource.allowVolumeExpansion == true) put("Allow Expansion", "true")
+            resource.parameters?.forEach { (k, v) -> put("Param: $k", v) }
+        }
+        is io.fabric8.kubernetes.api.model.Event -> buildMap {
+            put("Type", resource.type ?: "")
+            put("Reason", resource.reason ?: "")
+            put("Message", resource.message ?: "")
+            put("Count", "${resource.count ?: 0}")
+            resource.firstTimestamp?.let { put("First Seen", it) }
+            resource.lastTimestamp?.let { put("Last Seen", it) }
+            resource.involvedObject?.let { obj ->
+                put("Object", "${obj.kind}/${obj.name}")
+            }
+            put("Source", buildString {
+                resource.source?.component?.let { append(it) }
+                resource.source?.host?.let { if (isNotEmpty()) append("/"); append(it) }
+            })
+        }
+        is HorizontalPodAutoscaler -> buildMap {
+            put("Min Replicas", "${resource.spec?.minReplicas ?: 0}")
+            put("Max Replicas", "${resource.spec?.maxReplicas ?: 0}")
+            put("Current Replicas", "${resource.status?.currentReplicas ?: 0}")
+            put("Desired Replicas", "${resource.status?.desiredReplicas ?: 0}")
+            resource.spec?.metrics?.let { metrics ->
+                put("Metrics", metrics.joinToString("\n") { metric ->
+                    when (metric.type) {
+                        "Resource" -> {
+                            val name = metric.resource?.name ?: ""
+                            val target = metric.resource?.target?.averageUtilization
+                            "$name target: ${target ?: "?"}%"
+                        }
+                        else -> "${metric.type}: ${metric.`object`?.metric?.name ?: metric.pods?.metric?.name ?: ""}"
+                    }
+                })
+            }
+            resource.spec?.scaleTargetRef?.let { ref ->
+                put("Target", "${ref.kind}/${ref.name}")
+            }
+        }
+        is NetworkPolicy -> buildMap {
+            resource.spec?.podSelector?.matchLabels?.let { labels ->
+                put("Pod Selector", labels.entries.joinToString(", ") { "${it.key}=${it.value}" })
+            } ?: put("Pod Selector", "<all pods>")
+            resource.spec?.policyTypes?.let { put("Policy Types", it.joinToString(", ")) }
+            resource.spec?.ingress?.let { rules ->
+                put("Ingress Rules", "${rules.size}")
+            }
+            resource.spec?.egress?.let { rules ->
+                put("Egress Rules", "${rules.size}")
+            }
+        }
+        is Endpoints -> buildMap {
+            resource.subsets?.let { subsets ->
+                subsets.forEachIndexed { i, subset ->
+                    val addresses = subset.addresses?.joinToString(", ") { it.ip } ?: "none"
+                    val ports = subset.ports?.joinToString(", ") { "${it.port}/${it.protocol}" } ?: "none"
+                    put("Subset ${i + 1} Addresses", addresses)
+                    put("Subset ${i + 1} Ports", ports)
+                }
+            }
+        }
+        is Role -> buildMap {
+            put("Rules", "${resource.rules?.size ?: 0}")
+            resource.rules?.forEachIndexed { i, rule ->
+                val resources = rule.resources?.joinToString(", ") ?: "*"
+                val verbs = rule.verbs?.joinToString(", ") ?: "*"
+                put("Rule ${i + 1}", "$verbs on $resources")
+            }
+        }
+        is ClusterRole -> buildMap {
+            put("Rules", "${resource.rules?.size ?: 0}")
+            resource.rules?.take(5)?.forEachIndexed { i, rule ->
+                val resources = rule.resources?.joinToString(", ") ?: "*"
+                val verbs = rule.verbs?.joinToString(", ") ?: "*"
+                put("Rule ${i + 1}", "$verbs on $resources")
+            }
+            val ruleCount = resource.rules?.size ?: 0
+            if (ruleCount > 5) put("...", "+${ruleCount - 5} more rules")
+        }
+        is RoleBinding -> buildMap {
+            put("Role", "${resource.roleRef.kind}/${resource.roleRef.name}")
+            put("Subjects", "${resource.subjects?.size ?: 0}")
+            resource.subjects?.forEach { subj ->
+                put("${subj.kind}", "${subj.namespace?.let { "$it/" } ?: ""}${subj.name}")
+            }
+        }
+        is ClusterRoleBinding -> buildMap {
+            put("Role", "${resource.roleRef.kind}/${resource.roleRef.name}")
+            put("Subjects", "${resource.subjects?.size ?: 0}")
+            resource.subjects?.forEach { subj ->
+                put("${subj.kind}", "${subj.namespace?.let { "$it/" } ?: ""}${subj.name}")
+            }
+        }
+        is ResourceQuota -> buildMap {
+            resource.status?.hard?.forEach { (k, v) ->
+                val used = resource.status?.used?.get(k)
+                put(k, "${used ?: "0"} / $v")
+            }
+        }
+        is LimitRange -> buildMap {
+            resource.spec?.limits?.forEachIndexed { i, limit ->
+                put("Type ${i + 1}", limit.type ?: "")
+                limit.default?.forEach { (k, v) -> put("Default $k", v.toString()) }
+                limit.defaultRequest?.forEach { (k, v) -> put("Default Request $k", v.toString()) }
+                limit.max?.forEach { (k, v) -> put("Max $k", v.toString()) }
+                limit.min?.forEach { (k, v) -> put("Min $k", v.toString()) }
             }
         }
         else -> emptyMap()

@@ -33,12 +33,26 @@ class KubernetesRepository(private val client: KubernetesClient) {
                 ResourceType.DaemonSet -> if (allNamespaces) client.apps().daemonSets().inAnyNamespace().list().items else client.apps().daemonSets().inNamespace(namespace).list().items
                 ResourceType.Job -> if (allNamespaces) client.batch().v1().jobs().inAnyNamespace().list().items else client.batch().v1().jobs().inNamespace(namespace).list().items
                 ResourceType.CronJob -> if (allNamespaces) client.batch().v1().cronjobs().inAnyNamespace().list().items else client.batch().v1().cronjobs().inNamespace(namespace).list().items
+                ResourceType.Event -> if (allNamespaces) client.v1().events().inAnyNamespace().list().items else client.v1().events().inNamespace(namespace).list().items
+                ResourceType.HorizontalPodAutoscaler -> if (allNamespaces) client.autoscaling().v2().horizontalPodAutoscalers().inAnyNamespace().list().items else client.autoscaling().v2().horizontalPodAutoscalers().inNamespace(namespace).list().items
                 ResourceType.Service -> if (allNamespaces) client.services().inAnyNamespace().list().items else client.services().inNamespace(namespace).list().items
                 ResourceType.Ingress -> if (allNamespaces) client.network().v1().ingresses().inAnyNamespace().list().items else client.network().v1().ingresses().inNamespace(namespace).list().items
+                ResourceType.NetworkPolicy -> if (allNamespaces) client.network().v1().networkPolicies().inAnyNamespace().list().items else client.network().v1().networkPolicies().inNamespace(namespace).list().items
+                ResourceType.Endpoints -> if (allNamespaces) client.endpoints().inAnyNamespace().list().items else client.endpoints().inNamespace(namespace).list().items
                 ResourceType.ConfigMap -> if (allNamespaces) client.configMaps().inAnyNamespace().list().items else client.configMaps().inNamespace(namespace).list().items
                 ResourceType.Secret -> if (allNamespaces) client.secrets().inAnyNamespace().list().items else client.secrets().inNamespace(namespace).list().items
                 ResourceType.ServiceAccount -> if (allNamespaces) client.serviceAccounts().inAnyNamespace().list().items else client.serviceAccounts().inNamespace(namespace).list().items
+                ResourceType.Role -> if (allNamespaces) client.rbac().roles().inAnyNamespace().list().items else client.rbac().roles().inNamespace(namespace).list().items
+                ResourceType.RoleBinding -> if (allNamespaces) client.rbac().roleBindings().inAnyNamespace().list().items else client.rbac().roleBindings().inNamespace(namespace).list().items
                 ResourceType.PersistentVolumeClaim -> if (allNamespaces) client.persistentVolumeClaims().inAnyNamespace().list().items else client.persistentVolumeClaims().inNamespace(namespace).list().items
+                ResourceType.PersistentVolume -> client.persistentVolumes().list().items
+                ResourceType.StorageClass -> client.storage().v1().storageClasses().list().items
+                ResourceType.Node -> client.nodes().list().items
+                ResourceType.Namespace -> client.namespaces().list().items
+                ResourceType.ClusterRole -> client.rbac().clusterRoles().list().items
+                ResourceType.ClusterRoleBinding -> client.rbac().clusterRoleBindings().list().items
+                ResourceType.ResourceQuota -> if (allNamespaces) client.resourceQuotas().inAnyNamespace().list().items else client.resourceQuotas().inNamespace(namespace).list().items
+                ResourceType.LimitRange -> if (allNamespaces) client.limitRanges().inAnyNamespace().list().items else client.limitRanges().inNamespace(namespace).list().items
             }
             items.map { ResourceMappers.toSummary(it, type) }
         }
@@ -53,12 +67,26 @@ class KubernetesRepository(private val client: KubernetesClient) {
                 ResourceType.DaemonSet -> client.apps().daemonSets().inNamespace(namespace).withName(name).get()
                 ResourceType.Job -> client.batch().v1().jobs().inNamespace(namespace).withName(name).get()
                 ResourceType.CronJob -> client.batch().v1().cronjobs().inNamespace(namespace).withName(name).get()
+                ResourceType.Event -> client.v1().events().inNamespace(namespace).withName(name).get()
+                ResourceType.HorizontalPodAutoscaler -> client.autoscaling().v2().horizontalPodAutoscalers().inNamespace(namespace).withName(name).get()
                 ResourceType.Service -> client.services().inNamespace(namespace).withName(name).get()
                 ResourceType.Ingress -> client.network().v1().ingresses().inNamespace(namespace).withName(name).get()
+                ResourceType.NetworkPolicy -> client.network().v1().networkPolicies().inNamespace(namespace).withName(name).get()
+                ResourceType.Endpoints -> client.endpoints().inNamespace(namespace).withName(name).get()
                 ResourceType.ConfigMap -> client.configMaps().inNamespace(namespace).withName(name).get()
                 ResourceType.Secret -> client.secrets().inNamespace(namespace).withName(name).get()
                 ResourceType.ServiceAccount -> client.serviceAccounts().inNamespace(namespace).withName(name).get()
+                ResourceType.Role -> client.rbac().roles().inNamespace(namespace).withName(name).get()
+                ResourceType.RoleBinding -> client.rbac().roleBindings().inNamespace(namespace).withName(name).get()
                 ResourceType.PersistentVolumeClaim -> client.persistentVolumeClaims().inNamespace(namespace).withName(name).get()
+                ResourceType.PersistentVolume -> client.persistentVolumes().withName(name).get()
+                ResourceType.StorageClass -> client.storage().v1().storageClasses().withName(name).get()
+                ResourceType.Node -> client.nodes().withName(name).get()
+                ResourceType.Namespace -> client.namespaces().withName(name).get()
+                ResourceType.ClusterRole -> client.rbac().clusterRoles().withName(name).get()
+                ResourceType.ClusterRoleBinding -> client.rbac().clusterRoleBindings().withName(name).get()
+                ResourceType.ResourceQuota -> client.resourceQuotas().inNamespace(namespace).withName(name).get()
+                ResourceType.LimitRange -> client.limitRanges().inNamespace(namespace).withName(name).get()
             }
         }
 
