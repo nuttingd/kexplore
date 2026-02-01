@@ -31,7 +31,6 @@ import com.patrykandpatrick.vico.compose.cartesian.rememberCartesianChart
 import com.patrykandpatrick.vico.core.cartesian.axis.HorizontalAxis
 import com.patrykandpatrick.vico.core.cartesian.axis.VerticalAxis
 import com.patrykandpatrick.vico.core.cartesian.data.CartesianChartModelProducer
-import com.patrykandpatrick.vico.core.cartesian.data.CartesianValueFormatter
 import com.patrykandpatrick.vico.core.cartesian.data.lineSeries
 import dev.nutting.kexplore.data.kubernetes.MetricsRepository
 import dev.nutting.kexplore.data.metrics.MetricsCollector
@@ -39,7 +38,6 @@ import dev.nutting.kexplore.data.model.ResourceMetricsSnapshot
 import dev.nutting.kexplore.data.model.ResourceType
 
 private const val WINDOW_SLOTS = 60 // 60 slots × 5s = 5 min window
-private const val POLL_INTERVAL_SEC = 5
 
 @Composable
 fun MetricsTab(
@@ -136,19 +134,6 @@ private fun MetricsChartCard(
         }
     }
 
-    // X-axis formatter: show relative time labels (e.g. "-15m", "-10m", "-5m", "now")
-    val bottomAxisFormatter = remember {
-        CartesianValueFormatter { _, x, _ ->
-            val slotIndex = x.toInt()
-            val secondsAgo = (WINDOW_SLOTS - 1 - slotIndex) * POLL_INTERVAL_SEC
-            when {
-                slotIndex == WINDOW_SLOTS - 1 -> "now"
-                secondsAgo > 0 && secondsAgo % 60 == 0 -> "-${secondsAgo / 60}m"
-                else -> ""
-            }
-        }
-    }
-
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -181,9 +166,7 @@ private fun MetricsChartCard(
                 rememberCartesianChart(
                     rememberLineCartesianLayer(),
                     startAxis = VerticalAxis.rememberStart(),
-                    bottomAxis = HorizontalAxis.rememberBottom(
-                        valueFormatter = bottomAxisFormatter,
-                    ),
+                    bottomAxis = HorizontalAxis.rememberBottom(),
                 ),
                 modelProducer,
                 modifier = Modifier
@@ -192,7 +175,7 @@ private fun MetricsChartCard(
             )
 
             Text(
-                text = "${snapshots.size} sample${if (snapshots.size != 1) "s" else ""} · polling every ${POLL_INTERVAL_SEC}s",
+                text = "${snapshots.size} sample${if (snapshots.size != 1) "s" else ""} · polling every 5s",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp),
