@@ -7,6 +7,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import dev.nutting.kexplore.data.model.ResourceSummary
 
 @Composable
@@ -34,6 +35,6 @@ fun ResourceListItem(
         trailingContent = {
             StatusChip(status = summary.status)
         },
-        modifier = modifier.clickable(onClick = onClick),
+        modifier = modifier.clickable(role = Role.Button, onClick = onClick),
     )
 }

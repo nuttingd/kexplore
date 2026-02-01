@@ -1,6 +1,5 @@
 package dev.nutting.kexplore.ui.screen.detail
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,7 +19,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.patrykandpatrick.vico.compose.cartesian.CartesianChartHost
@@ -37,6 +35,7 @@ import dev.nutting.kexplore.data.kubernetes.MetricsRepository
 import dev.nutting.kexplore.data.metrics.MetricsCollector
 import dev.nutting.kexplore.data.model.ResourceMetricsSnapshot
 import dev.nutting.kexplore.data.model.ResourceType
+import dev.nutting.kexplore.ui.components.EmptyContent
 
 private const val WINDOW_SLOTS = 60 // 60 slots × 5s = 5 min window
 
@@ -48,7 +47,7 @@ fun MetricsTab(
     resourceType: ResourceType,
 ) {
     if (metricsRepository == null) {
-        CenteredMessage("Not connected")
+        EmptyContent(message = "Not connected")
         return
     }
 
@@ -71,11 +70,11 @@ fun MetricsTab(
     val nodeCapacity by collector.nodeCapacity.collectAsState()
 
     when (metricsAvailable) {
-        null -> CenteredMessage("Checking metrics availability...")
-        false -> CenteredMessage("Metrics unavailable — install metrics-server")
+        null -> EmptyContent(message ="Checking metrics availability...")
+        false -> EmptyContent(message ="Metrics unavailable — install metrics-server")
         true -> {
             if (snapshots.isEmpty()) {
-                CenteredMessage("Waiting for metrics data...")
+                EmptyContent(message ="Waiting for metrics data...")
             } else {
                 Column(
                     modifier = Modifier
@@ -186,17 +185,3 @@ private fun MetricsChartCard(
     }
 }
 
-@Composable
-private fun CenteredMessage(message: String) {
-    Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(
-            text = message,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}

@@ -2,6 +2,7 @@ package dev.nutting.kexplore.ui.screen.main
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -64,7 +65,7 @@ fun DrawerContent(
                             )
                         }
                     },
-                    modifier = Modifier.clickable { onSelectConnection(connection.id) },
+                    modifier = Modifier.clickable(role = Role.Button) { onSelectConnection(connection.id) },
                 )
             }
         }
@@ -101,7 +102,7 @@ fun DrawerContent(
                                 )
                             }
                         },
-                        modifier = Modifier.clickable { onSelectNamespace("") },
+                        modifier = Modifier.clickable(role = Role.Button) { onSelectNamespace("") },
                     )
                     HorizontalDivider()
                 }
@@ -117,7 +118,7 @@ fun DrawerContent(
                                 )
                             }
                         },
-                        modifier = Modifier.clickable { onSelectNamespace(ns) },
+                        modifier = Modifier.clickable(role = Role.Button) { onSelectNamespace(ns) },
                     )
                 }
             }

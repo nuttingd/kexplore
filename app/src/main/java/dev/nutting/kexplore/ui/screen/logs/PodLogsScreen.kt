@@ -3,16 +3,12 @@ package dev.nutting.kexplore.ui.screen.logs
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ContentCopy
@@ -41,12 +37,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import dev.nutting.kexplore.data.kubernetes.KubernetesRepository
+import dev.nutting.kexplore.ui.components.TerminalView
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -177,40 +171,12 @@ fun PodLogsScreen(
             }
 
             // Log output
-            val listState = rememberLazyListState()
-
-            LaunchedEffect(state.lines.size, state.isFollowing) {
-                if (state.isFollowing && state.lines.isNotEmpty()) {
-                    listState.animateScrollToItem(state.lines.size - 1)
-                }
-            }
-
-            LazyColumn(
-                state = listState,
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .background(Color(0xFF1E1E1E))
-                    .padding(4.dp),
-            ) {
-                itemsIndexed(state.lines) { index, line ->
-                    Row {
-                        Text(
-                            text = "${index + 1}".padStart(5),
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 11.sp,
-                            color = Color(0xFF858585),
-                            modifier = Modifier.padding(end = 8.dp),
-                        )
-                        Text(
-                            text = line,
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 11.sp,
-                            color = Color(0xFFD4D4D4),
-                        )
-                    }
-                }
-            }
+            TerminalView(
+                lines = state.lines,
+                autoScroll = state.isFollowing,
+                showLineNumbers = true,
+                modifier = Modifier.weight(1f),
+            )
         }
     }
 
