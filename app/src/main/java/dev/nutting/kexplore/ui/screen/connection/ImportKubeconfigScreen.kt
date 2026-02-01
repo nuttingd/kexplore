@@ -1,6 +1,7 @@
 package dev.nutting.kexplore.ui.screen.connection
 
 import androidx.activity.compose.rememberLauncherForActivityResult
+import android.content.Intent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
@@ -44,9 +45,9 @@ fun ImportKubeconfigScreen(
     val state by viewModel.kubeconfigState.collectAsState()
 
     val filePicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument(),
-    ) { uri ->
-        uri?.let { viewModel.loadKubeconfigFile(it) }
+        contract = ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        result.data?.data?.let { uri -> viewModel.loadKubeconfigFile(uri) }
     }
 
     Scaffold(
@@ -68,7 +69,13 @@ fun ImportKubeconfigScreen(
                 .padding(horizontal = 16.dp),
         ) {
             FilledTonalButton(
-                onClick = { filePicker.launch(arrayOf("*/*")) },
+                onClick = {
+                    val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                        addCategory(Intent.CATEGORY_OPENABLE)
+                        type = "*/*"
+                    }
+                    filePicker.launch(intent)
+                },
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Icon(Icons.Default.FileOpen, contentDescription = null)
