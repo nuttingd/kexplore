@@ -116,21 +116,11 @@ private fun MetricsChartCard(
 ) {
     val modelProducer = remember { CartesianChartModelProducer() }
 
-    // Build a fixed-width series: WINDOW_SLOTS points where trailing slots
-    // without data are 0. Data is right-aligned so new points appear on the right.
     LaunchedEffect(snapshots) {
         if (snapshots.isNotEmpty()) {
-            val values = snapshots.map { valueExtractor(it) }
-            val padded = if (values.size < WINDOW_SLOTS) {
-                // Pad the left side with the earliest known value so the chart
-                // has a stable x-axis width and data "scrolls in" from the right.
-                val fill = List(WINDOW_SLOTS - values.size) { values.first() }
-                fill + values
-            } else {
-                values.takeLast(WINDOW_SLOTS)
-            }
+            val values = snapshots.takeLast(WINDOW_SLOTS).map { valueExtractor(it) }
             modelProducer.runTransaction {
-                lineSeries { series(padded) }
+                lineSeries { series(values) }
             }
         }
     }
