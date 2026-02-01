@@ -40,6 +40,7 @@ import dev.nutting.kexplore.data.model.ContentState
 import dev.nutting.kexplore.data.model.ResourceDetail
 import dev.nutting.kexplore.data.model.ResourceType
 import dev.nutting.kexplore.ui.components.ContentStateHost
+import dev.nutting.kexplore.ui.components.KeyValueRow
 import dev.nutting.kexplore.ui.components.LabelChipGroup
 import dev.nutting.kexplore.ui.components.MetadataCard
 import dev.nutting.kexplore.ui.components.SectionHeader
@@ -161,14 +162,14 @@ private fun OverviewTab(
             if (resource.annotations.isNotEmpty()) {
                 SectionHeader("Annotations")
                 resource.annotations.forEach { (k, v) ->
-                    DetailRow(k, v)
+                    KeyValueRow(k, v)
                 }
             }
 
             if (resource.spec.isNotEmpty()) {
                 SectionHeader(specSectionTitle(resourceType))
                 resource.spec.forEach { (k, v) ->
-                    DetailRow(k, v)
+                    KeyValueRow(k, v)
                 }
             }
 
@@ -192,7 +193,7 @@ private fun OverviewTab(
             if (resource.conditions.isNotEmpty()) {
                 SectionHeader("Conditions")
                 resource.conditions.forEach { condition ->
-                    DetailRow(
+                    KeyValueRow(
                         condition.type,
                         buildString {
                             append(condition.status)
@@ -232,21 +233,21 @@ private fun ContainerCard(container: ContainerInfo) {
                 text = container.name,
                 style = MaterialTheme.typography.titleSmall,
             )
-            DetailRow("Image", container.image)
-            DetailRow("State", "${container.state} (ready: ${container.ready}, restarts: ${container.restartCount})")
+            KeyValueRow("Image", container.image)
+            KeyValueRow("State", "${container.state} (ready: ${container.ready}, restarts: ${container.restartCount})")
 
             if (container.ports.isNotEmpty()) {
-                DetailRow("Ports", container.ports.joinToString(", "))
+                KeyValueRow("Ports", container.ports.joinToString(", "))
             }
             if (container.env.isNotEmpty()) {
-                DetailRow("Env", container.env.take(5).joinToString("\n") +
+                KeyValueRow("Env", container.env.take(5).joinToString("\n") +
                     if (container.env.size > 5) "\n... +${container.env.size - 5} more" else "")
             }
             container.resources?.let {
-                DetailRow("Resources", it)
+                KeyValueRow("Resources", it)
             }
             if (container.mounts.isNotEmpty()) {
-                DetailRow("Mounts", container.mounts.joinToString("\n"))
+                KeyValueRow("Mounts", container.mounts.joinToString("\n"))
             }
         }
     }
@@ -310,17 +311,3 @@ private fun ExecTab(
     }
 }
 
-@Composable
-internal fun DetailRow(label: String, value: String) {
-    Column(modifier = Modifier.padding(vertical = 2.dp)) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyMedium,
-        )
-    }
-}

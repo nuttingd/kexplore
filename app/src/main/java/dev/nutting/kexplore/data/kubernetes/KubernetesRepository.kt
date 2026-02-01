@@ -4,8 +4,11 @@ import dev.nutting.kexplore.data.model.ResourceDetail
 import dev.nutting.kexplore.data.model.ResourceSummary
 import dev.nutting.kexplore.data.model.ResourceType
 import io.fabric8.kubernetes.api.model.HasMetadata
+import io.fabric8.kubernetes.api.model.KubernetesResourceList
 import io.fabric8.kubernetes.client.KubernetesClient
 import io.fabric8.kubernetes.client.dsl.ExecWatch
+import io.fabric8.kubernetes.client.dsl.MixedOperation
+import io.fabric8.kubernetes.client.dsl.Resource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -20,41 +23,48 @@ import java.io.PipedOutputStream
 
 class KubernetesRepository(private val client: KubernetesClient) {
 
+    /**
+     * Lists items from a namespaced operation, respecting the all-namespaces vs single-namespace scope.
+     */
+    private fun <T : HasMetadata, L : KubernetesResourceList<T>, R : Resource<T>>
+            MixedOperation<T, L, R>.listScoped(namespace: String): List<T> =
+        if (namespace.isEmpty()) inAnyNamespace().list().items
+        else inNamespace(namespace).list().items
+
     suspend fun getNamespaces(): List<String> = withContext(Dispatchers.IO) {
         client.namespaces().list().items.map { it.metadata.name }
     }
 
     suspend fun getResources(namespace: String, type: ResourceType): List<ResourceSummary> =
         withContext(Dispatchers.IO) {
-            val allNamespaces = namespace.isEmpty()
             val items: List<HasMetadata> = when (type) {
-                ResourceType.Pod -> if (allNamespaces) client.pods().inAnyNamespace().list().items else client.pods().inNamespace(namespace).list().items
-                ResourceType.Deployment -> if (allNamespaces) client.apps().deployments().inAnyNamespace().list().items else client.apps().deployments().inNamespace(namespace).list().items
-                ResourceType.ReplicaSet -> if (allNamespaces) client.apps().replicaSets().inAnyNamespace().list().items else client.apps().replicaSets().inNamespace(namespace).list().items
-                ResourceType.StatefulSet -> if (allNamespaces) client.apps().statefulSets().inAnyNamespace().list().items else client.apps().statefulSets().inNamespace(namespace).list().items
-                ResourceType.DaemonSet -> if (allNamespaces) client.apps().daemonSets().inAnyNamespace().list().items else client.apps().daemonSets().inNamespace(namespace).list().items
-                ResourceType.Job -> if (allNamespaces) client.batch().v1().jobs().inAnyNamespace().list().items else client.batch().v1().jobs().inNamespace(namespace).list().items
-                ResourceType.CronJob -> if (allNamespaces) client.batch().v1().cronjobs().inAnyNamespace().list().items else client.batch().v1().cronjobs().inNamespace(namespace).list().items
-                ResourceType.Event -> if (allNamespaces) client.v1().events().inAnyNamespace().list().items else client.v1().events().inNamespace(namespace).list().items
-                ResourceType.HorizontalPodAutoscaler -> if (allNamespaces) client.autoscaling().v2().horizontalPodAutoscalers().inAnyNamespace().list().items else client.autoscaling().v2().horizontalPodAutoscalers().inNamespace(namespace).list().items
-                ResourceType.Service -> if (allNamespaces) client.services().inAnyNamespace().list().items else client.services().inNamespace(namespace).list().items
-                ResourceType.Ingress -> if (allNamespaces) client.network().v1().ingresses().inAnyNamespace().list().items else client.network().v1().ingresses().inNamespace(namespace).list().items
-                ResourceType.NetworkPolicy -> if (allNamespaces) client.network().v1().networkPolicies().inAnyNamespace().list().items else client.network().v1().networkPolicies().inNamespace(namespace).list().items
-                ResourceType.Endpoints -> if (allNamespaces) client.endpoints().inAnyNamespace().list().items else client.endpoints().inNamespace(namespace).list().items
-                ResourceType.ConfigMap -> if (allNamespaces) client.configMaps().inAnyNamespace().list().items else client.configMaps().inNamespace(namespace).list().items
-                ResourceType.Secret -> if (allNamespaces) client.secrets().inAnyNamespace().list().items else client.secrets().inNamespace(namespace).list().items
-                ResourceType.ServiceAccount -> if (allNamespaces) client.serviceAccounts().inAnyNamespace().list().items else client.serviceAccounts().inNamespace(namespace).list().items
-                ResourceType.Role -> if (allNamespaces) client.rbac().roles().inAnyNamespace().list().items else client.rbac().roles().inNamespace(namespace).list().items
-                ResourceType.RoleBinding -> if (allNamespaces) client.rbac().roleBindings().inAnyNamespace().list().items else client.rbac().roleBindings().inNamespace(namespace).list().items
-                ResourceType.PersistentVolumeClaim -> if (allNamespaces) client.persistentVolumeClaims().inAnyNamespace().list().items else client.persistentVolumeClaims().inNamespace(namespace).list().items
+                ResourceType.Pod -> client.pods().listScoped(namespace)
+                ResourceType.Deployment -> client.apps().deployments().listScoped(namespace)
+                ResourceType.ReplicaSet -> client.apps().replicaSets().listScoped(namespace)
+                ResourceType.StatefulSet -> client.apps().statefulSets().listScoped(namespace)
+                ResourceType.DaemonSet -> client.apps().daemonSets().listScoped(namespace)
+                ResourceType.Job -> client.batch().v1().jobs().listScoped(namespace)
+                ResourceType.CronJob -> client.batch().v1().cronjobs().listScoped(namespace)
+                ResourceType.Event -> client.v1().events().listScoped(namespace)
+                ResourceType.HorizontalPodAutoscaler -> client.autoscaling().v2().horizontalPodAutoscalers().listScoped(namespace)
+                ResourceType.Service -> client.services().listScoped(namespace)
+                ResourceType.Ingress -> client.network().v1().ingresses().listScoped(namespace)
+                ResourceType.NetworkPolicy -> client.network().v1().networkPolicies().listScoped(namespace)
+                ResourceType.Endpoints -> client.endpoints().listScoped(namespace)
+                ResourceType.ConfigMap -> client.configMaps().listScoped(namespace)
+                ResourceType.Secret -> client.secrets().listScoped(namespace)
+                ResourceType.ServiceAccount -> client.serviceAccounts().listScoped(namespace)
+                ResourceType.Role -> client.rbac().roles().listScoped(namespace)
+                ResourceType.RoleBinding -> client.rbac().roleBindings().listScoped(namespace)
+                ResourceType.PersistentVolumeClaim -> client.persistentVolumeClaims().listScoped(namespace)
                 ResourceType.PersistentVolume -> client.persistentVolumes().list().items
                 ResourceType.StorageClass -> client.storage().v1().storageClasses().list().items
                 ResourceType.Node -> client.nodes().list().items
                 ResourceType.Namespace -> client.namespaces().list().items
                 ResourceType.ClusterRole -> client.rbac().clusterRoles().list().items
                 ResourceType.ClusterRoleBinding -> client.rbac().clusterRoleBindings().list().items
-                ResourceType.ResourceQuota -> if (allNamespaces) client.resourceQuotas().inAnyNamespace().list().items else client.resourceQuotas().inNamespace(namespace).list().items
-                ResourceType.LimitRange -> if (allNamespaces) client.limitRanges().inAnyNamespace().list().items else client.limitRanges().inNamespace(namespace).list().items
+                ResourceType.ResourceQuota -> client.resourceQuotas().listScoped(namespace)
+                ResourceType.LimitRange -> client.limitRanges().listScoped(namespace)
             }
             items.map { ResourceMappers.toSummary(it, type) }
         }

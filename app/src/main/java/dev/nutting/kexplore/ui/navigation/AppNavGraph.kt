@@ -3,12 +3,14 @@ package dev.nutting.kexplore.ui.navigation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import android.net.Uri
 import dev.nutting.kexplore.MainViewModel
 import dev.nutting.kexplore.data.model.ResourceType
 import dev.nutting.kexplore.ui.screen.connection.ConnectionManagementScreen
@@ -36,15 +38,15 @@ object Routes {
     const val CLUSTER_SCOPE_SENTINEL = "_cluster"
 
     fun resourceDetail(namespace: String, kind: ResourceType, name: String): String {
-        val ns = if (kind.isClusterScoped) CLUSTER_SCOPE_SENTINEL else namespace
-        return "resource/$ns/${kind.name}/$name"
+        val ns = if (kind.isClusterScoped) CLUSTER_SCOPE_SENTINEL else Uri.encode(namespace)
+        return "resource/$ns/${kind.name}/${Uri.encode(name)}"
     }
 
     fun podLogs(namespace: String, pod: String): String =
-        "logs/$namespace/$pod"
+        "logs/${Uri.encode(namespace)}/${Uri.encode(pod)}"
 
     fun podExec(namespace: String, pod: String, container: String): String =
-        "exec/$namespace/$pod/$container"
+        "exec/${Uri.encode(namespace)}/${Uri.encode(pod)}/${Uri.encode(container)}"
 }
 
 @Composable
@@ -54,7 +56,7 @@ fun AppNavGraph(
     mainViewModel: MainViewModel,
 ) {
     val connectionViewModel: ConnectionViewModel = viewModel()
-    val startDestination = if (hasConnections) Routes.MAIN else Routes.SETUP
+    val startDestination = remember { if (hasConnections) Routes.MAIN else Routes.SETUP }
 
     NavHost(navController = navController, startDestination = startDestination) {
         composable(Routes.SETUP) {

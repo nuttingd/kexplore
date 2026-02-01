@@ -54,7 +54,7 @@ data class KubeconfigContext(
 
 class ConnectionViewModel(application: Application) : AndroidViewModel(application) {
 
-    val connectionStore = getApplication<KexploreApp>().connectionStore
+    private val connectionStore = getApplication<KexploreApp>().connectionStore
 
     private val _manualState = MutableStateFlow(ManualConnectionState())
     val manualState: StateFlow<ManualConnectionState> = _manualState.asStateFlow()

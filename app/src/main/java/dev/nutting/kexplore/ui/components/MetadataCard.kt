@@ -44,25 +44,10 @@ fun MetadataCard(
             }
             Spacer(Modifier.height(8.dp))
             if (namespace.isNotEmpty()) {
-                MetadataRow("Namespace", namespace)
+                InlineKeyValueRow("Namespace", namespace)
             }
-            MetadataRow("UID", uid)
-            MetadataRow("Created", creationTimestamp)
+            InlineKeyValueRow("UID", uid)
+            InlineKeyValueRow("Created", creationTimestamp)
         }
-    }
-}
-
-@Composable
-private fun MetadataRow(label: String, value: String) {
-    Row(modifier = Modifier.padding(vertical = 2.dp)) {
-        Text(
-            text = "$label: ",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodySmall,
-        )
     }
 }
