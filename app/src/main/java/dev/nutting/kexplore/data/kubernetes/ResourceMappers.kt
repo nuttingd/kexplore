@@ -7,8 +7,10 @@ import dev.nutting.kexplore.data.model.ResourceStatus
 import dev.nutting.kexplore.data.model.ResourceSummary
 import dev.nutting.kexplore.data.model.ResourceType
 import dev.nutting.kexplore.util.DateFormatter
+import io.fabric8.kubernetes.api.model.ConfigMap
 import io.fabric8.kubernetes.api.model.HasMetadata
 import io.fabric8.kubernetes.api.model.Pod
+import io.fabric8.kubernetes.api.model.Secret
 import io.fabric8.kubernetes.api.model.Service
 import io.fabric8.kubernetes.api.model.apps.Deployment
 import io.fabric8.kubernetes.api.model.apps.DaemonSet
@@ -145,20 +147,46 @@ object ResourceMappers {
     }
 
     private fun extractSpec(resource: HasMetadata): Map<String, String> = when (resource) {
-        is Pod -> mapOf(
-            "Node" to (resource.spec?.nodeName ?: ""),
-            "Service Account" to (resource.spec?.serviceAccountName ?: ""),
-            "Restart Policy" to (resource.spec?.restartPolicy ?: ""),
-        )
-        is Deployment -> mapOf(
-            "Replicas" to "${resource.spec?.replicas ?: 0}",
-            "Strategy" to (resource.spec?.strategy?.type ?: ""),
-        )
-        is Service -> mapOf(
-            "Type" to (resource.spec?.type ?: ""),
-            "Cluster IP" to (resource.spec?.clusterIP ?: ""),
-            "Ports" to (resource.spec?.ports?.joinToString { "${it.port}/${it.protocol}" } ?: ""),
-        )
+        is Pod -> buildMap {
+            put("Node", resource.spec?.nodeName ?: "")
+            put("Pod IP", resource.status?.podIP ?: "")
+            put("QoS Class", resource.status?.qosClass ?: "")
+            put("Service Account", resource.spec?.serviceAccountName ?: "")
+            put("Restart Policy", resource.spec?.restartPolicy ?: "")
+            resource.spec?.volumes?.let { volumes ->
+                put("Volumes", volumes.joinToString(", ") { it.name })
+            }
+        }
+        is Deployment -> buildMap {
+            put("Strategy", resource.spec?.strategy?.type ?: "")
+            val desired = resource.spec?.replicas ?: 0
+            val ready = resource.status?.readyReplicas ?: 0
+            val updated = resource.status?.updatedReplicas ?: 0
+            val available = resource.status?.availableReplicas ?: 0
+            put("Replicas", "$ready ready / $desired desired")
+            put("Updated Replicas", "$updated")
+            put("Available Replicas", "$available")
+            resource.spec?.selector?.matchLabels?.let { selectors ->
+                put("Selector", selectors.entries.joinToString(", ") { "${it.key}=${it.value}" })
+            }
+        }
+        is Service -> buildMap {
+            put("Type", resource.spec?.type ?: "")
+            put("Cluster IP", resource.spec?.clusterIP ?: "")
+            resource.spec?.ports?.let { ports ->
+                put("Ports", ports.joinToString("\n") {
+                    buildString {
+                        append("${it.port}")
+                        if (it.targetPort != null) append(" → ${it.targetPort.value}")
+                        append("/${it.protocol}")
+                        if (it.nodePort != null && it.nodePort > 0) append(" (nodePort: ${it.nodePort})")
+                    }
+                })
+            }
+            resource.spec?.selector?.let { selectors ->
+                put("Selector", selectors.entries.joinToString(", ") { "${it.key}=${it.value}" })
+            }
+        }
         is StatefulSet -> mapOf(
             "Replicas" to "${resource.spec?.replicas ?: 0}",
             "Service Name" to (resource.spec?.serviceName ?: ""),
@@ -167,6 +195,18 @@ object ResourceMappers {
             "Schedule" to (resource.spec?.schedule ?: ""),
             "Suspend" to "${resource.spec?.suspend ?: false}",
         )
+        is ConfigMap -> buildMap {
+            resource.data?.forEach { (key, value) ->
+                val preview = if (value.length > 80) value.take(80) + "..." else value
+                put(key, preview)
+            }
+        }
+        is Secret -> buildMap {
+            put("Type", resource.type ?: "Opaque")
+            resource.data?.keys?.forEach { key ->
+                put(key, "\u2022\u2022\u2022\u2022\u2022")
+            }
+        }
         else -> emptyMap()
     }
 
@@ -184,6 +224,22 @@ object ResourceMappers {
                     status?.state?.terminated != null -> status.state.terminated.reason ?: "Terminated"
                     else -> "Unknown"
                 },
+                ports = container.ports?.map { "${it.containerPort}/${it.protocol ?: "TCP"}" } ?: emptyList(),
+                env = container.env?.map { env ->
+                    if (env.valueFrom != null) "${env.name}=<ref>" else "${env.name}=${env.value ?: ""}"
+                } ?: emptyList(),
+                resources = buildString {
+                    container.resources?.requests?.let { req ->
+                        if (req.isNotEmpty()) append("Requests: ${req.entries.joinToString(", ") { "${it.key}=${it.value}" }}")
+                    }
+                    container.resources?.limits?.let { lim ->
+                        if (lim.isNotEmpty()) {
+                            if (isNotEmpty()) append(" | ")
+                            append("Limits: ${lim.entries.joinToString(", ") { "${it.key}=${it.value}" }}")
+                        }
+                    }
+                }.ifEmpty { null },
+                mounts = container.volumeMounts?.map { "${it.name} → ${it.mountPath}" } ?: emptyList(),
             )
         } ?: emptyList()
         else -> emptyList()

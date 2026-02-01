@@ -1,16 +1,23 @@
 package dev.nutting.kexplore.ui.screen.detail
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
@@ -27,10 +34,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import dev.nutting.kexplore.data.kubernetes.KubernetesRepository
+import dev.nutting.kexplore.data.model.ContainerInfo
 import dev.nutting.kexplore.data.model.ContentState
 import dev.nutting.kexplore.data.model.ResourceDetail
 import dev.nutting.kexplore.data.model.ResourceType
 import dev.nutting.kexplore.ui.components.ContentStateHost
+import dev.nutting.kexplore.ui.components.LabelChipGroup
+import dev.nutting.kexplore.ui.components.MetadataCard
+import dev.nutting.kexplore.ui.components.SectionHeader
 import dev.nutting.kexplore.util.ErrorMapper
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -99,7 +110,7 @@ fun ResourceDetailScreen(
             }
 
             when (selectedTab) {
-                0 -> OverviewTab(detail = detail)
+                0 -> OverviewTab(detail = detail, resourceType = resourceType)
                 1 -> YamlTab(yaml = yaml)
                 2 -> LogsTab(
                     repository = repository,
@@ -115,7 +126,7 @@ fun ResourceDetailScreen(
 }
 
 @Composable
-private fun OverviewTab(detail: ContentState<ResourceDetail>) {
+private fun OverviewTab(detail: ContentState<ResourceDetail>, resourceType: ResourceType) {
     ContentStateHost(state = detail) { resource ->
         Column(
             modifier = Modifier
@@ -123,52 +134,108 @@ private fun OverviewTab(detail: ContentState<ResourceDetail>) {
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
         ) {
-            DetailSection("Metadata") {
-                DetailRow("Name", resource.name)
-                DetailRow("Namespace", resource.namespace)
-                DetailRow("UID", resource.uid)
-                DetailRow("Created", resource.creationTimestamp)
-                DetailRow("Status", resource.status.label)
-            }
+            MetadataCard(
+                name = resource.name,
+                namespace = resource.namespace,
+                uid = resource.uid,
+                creationTimestamp = resource.creationTimestamp,
+                status = resource.status,
+            )
 
             if (resource.labels.isNotEmpty()) {
-                DetailSection("Labels") {
-                    resource.labels.forEach { (k, v) ->
-                        DetailRow(k, v)
-                    }
-                }
+                SectionHeader("Labels")
+                LabelChipGroup(labels = resource.labels)
             }
 
             if (resource.annotations.isNotEmpty()) {
-                DetailSection("Annotations") {
-                    resource.annotations.forEach { (k, v) ->
-                        DetailRow(k, v)
-                    }
+                SectionHeader("Annotations")
+                resource.annotations.forEach { (k, v) ->
+                    DetailRow(k, v)
                 }
             }
 
             if (resource.spec.isNotEmpty()) {
-                DetailSection("Spec") {
-                    resource.spec.forEach { (k, v) ->
-                        DetailRow(k, v)
+                SectionHeader(specSectionTitle(resourceType))
+                resource.spec.forEach { (k, v) ->
+                    DetailRow(k, v)
+                }
+            }
+
+            // Deployment replicas progress bar
+            if (resourceType == ResourceType.Deployment) {
+                val replicasStr = resource.spec["Replicas"] ?: ""
+                val match = Regex("(\\d+) ready / (\\d+) desired").find(replicasStr)
+                if (match != null) {
+                    val ready = match.groupValues[1].toFloatOrNull() ?: 0f
+                    val desired = match.groupValues[2].toFloatOrNull() ?: 1f
+                    if (desired > 0f) {
+                        Spacer(Modifier.height(8.dp))
+                        LinearProgressIndicator(
+                            progress = { (ready / desired).coerceIn(0f, 1f) },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
                     }
                 }
             }
 
             if (resource.conditions.isNotEmpty()) {
-                DetailSection("Conditions") {
-                    resource.conditions.forEach { condition ->
-                        DetailRow(condition.type, "${condition.status} ${condition.reason ?: ""}")
-                    }
+                SectionHeader("Conditions")
+                resource.conditions.forEach { condition ->
+                    DetailRow(
+                        condition.type,
+                        buildString {
+                            append(condition.status)
+                            condition.reason?.let { append(" — $it") }
+                        },
+                    )
                 }
             }
 
             if (resource.containers.isNotEmpty()) {
-                DetailSection("Containers") {
-                    resource.containers.forEach { container ->
-                        DetailRow(container.name, "${container.image} (${container.state})")
-                    }
+                SectionHeader("Containers")
+                resource.containers.forEach { container ->
+                    ContainerCard(container)
+                    Spacer(Modifier.height(8.dp))
                 }
+            }
+        }
+    }
+}
+
+private fun specSectionTitle(type: ResourceType): String = when (type) {
+    ResourceType.ConfigMap -> "Data"
+    ResourceType.Secret -> "Data Keys"
+    else -> "Spec"
+}
+
+@Composable
+private fun ContainerCard(container: ContainerInfo) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        ),
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(
+                text = container.name,
+                style = MaterialTheme.typography.titleSmall,
+            )
+            DetailRow("Image", container.image)
+            DetailRow("State", "${container.state} (ready: ${container.ready}, restarts: ${container.restartCount})")
+
+            if (container.ports.isNotEmpty()) {
+                DetailRow("Ports", container.ports.joinToString(", "))
+            }
+            if (container.env.isNotEmpty()) {
+                DetailRow("Env", container.env.take(5).joinToString("\n") +
+                    if (container.env.size > 5) "\n... +${container.env.size - 5} more" else "")
+            }
+            container.resources?.let {
+                DetailRow("Resources", it)
+            }
+            if (container.mounts.isNotEmpty()) {
+                DetailRow("Mounts", container.mounts.joinToString("\n"))
             }
         }
     }
@@ -198,7 +265,6 @@ private fun LogsTab(
     namespace: String,
     podName: String,
 ) {
-    // Stub - will be fully implemented in Phase 5
     var logs by remember { mutableStateOf<ContentState<List<String>>>(ContentState.Loading) }
 
     LaunchedEffect(namespace, podName) {
@@ -251,11 +317,11 @@ private fun ExecTab(
             } else {
                 Text(
                     text = "Select a container to exec into:",
-                    style = androidx.compose.material3.MaterialTheme.typography.bodyLarge,
+                    style = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier.padding(bottom = 16.dp),
                 )
                 resource.containers.forEach { container ->
-                    androidx.compose.material3.FilledTonalButton(
+                    FilledTonalButton(
                         onClick = { onExec(container.name) },
                         modifier = Modifier
                             .fillMaxWidth()
@@ -270,26 +336,16 @@ private fun ExecTab(
 }
 
 @Composable
-private fun DetailSection(title: String, content: @Composable () -> Unit) {
-    Text(
-        text = title,
-        style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
-        modifier = Modifier.padding(top = 16.dp, bottom = 8.dp),
-    )
-    content()
-}
-
-@Composable
 private fun DetailRow(label: String, value: String) {
     Column(modifier = Modifier.padding(vertical = 2.dp)) {
         Text(
             text = label,
-            style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
-            color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Text(
             text = value,
-            style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodyMedium,
         )
     }
 }

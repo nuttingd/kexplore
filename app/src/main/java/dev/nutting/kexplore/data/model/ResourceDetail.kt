@@ -28,4 +28,8 @@ data class ContainerInfo(
     val ready: Boolean = false,
     val restartCount: Int = 0,
     val state: String = "Unknown",
+    val ports: List<String> = emptyList(),
+    val env: List<String> = emptyList(),
+    val resources: String? = null,
+    val mounts: List<String> = emptyList(),
 )
