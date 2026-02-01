@@ -86,9 +86,9 @@ fun MetricsTab(
                     MetricsChartCard(
                         title = "CPU (millicores)",
                         snapshots = snapshots,
-                        valueExtractor = { it.cpuMillicores.toFloat() },
+                        valueExtractor = { it.cpuMillicores.toDouble() },
                         valueFormatter = { "${it.toLong()}m" },
-                        capacityValue = if (resourceType == ResourceType.Node) nodeCapacity?.cpuCapacity?.toFloat() else null,
+                        capacityValue = if (resourceType == ResourceType.Node) nodeCapacity?.cpuCapacity?.toDouble() else null,
                     )
 
                     Spacer(Modifier.height(16.dp))
@@ -96,9 +96,9 @@ fun MetricsTab(
                     MetricsChartCard(
                         title = "Memory (MiB)",
                         snapshots = snapshots,
-                        valueExtractor = { it.memoryBytes.toFloat() / (1024 * 1024) },
+                        valueExtractor = { it.memoryBytes.toDouble() / (1024 * 1024) },
                         valueFormatter = { "${it.toLong()} MiB" },
-                        capacityValue = if (resourceType == ResourceType.Node) nodeCapacity?.memoryCapacity?.toFloat()?.div(1024 * 1024) else null,
+                        capacityValue = if (resourceType == ResourceType.Node) nodeCapacity?.memoryCapacity?.toDouble()?.div(1024 * 1024) else null,
                     )
                 }
             }
@@ -110,9 +110,9 @@ fun MetricsTab(
 private fun MetricsChartCard(
     title: String,
     snapshots: List<ResourceMetricsSnapshot>,
-    valueExtractor: (ResourceMetricsSnapshot) -> Float,
-    valueFormatter: (Float) -> String,
-    capacityValue: Float?,
+    valueExtractor: (ResourceMetricsSnapshot) -> Double,
+    valueFormatter: (Double) -> String,
+    capacityValue: Double?,
 ) {
     val modelProducer = remember { CartesianChartModelProducer() }
 
@@ -122,9 +122,9 @@ private fun MetricsChartCard(
         if (snapshots.isNotEmpty()) {
             val values = snapshots.map { valueExtractor(it) }
             val padded = if (values.size < WINDOW_SLOTS) {
-                // Pad the left side with the earliest known value so the chart
-                // has a stable x-axis width and data "scrolls in" from the right.
-                val fill = List(WINDOW_SLOTS - values.size) { values.first() }
+                // Pad the left side with zero so the chart has a stable x-axis
+                // width and real data "scrolls in" from the right.
+                val fill = List(WINDOW_SLOTS - values.size) { 0.0 }
                 fill + values
             } else {
                 values.takeLast(WINDOW_SLOTS)

@@ -1,5 +1,6 @@
 package dev.nutting.kexplore.data.kubernetes
 
+import android.util.Log
 import dev.nutting.kexplore.data.model.ContainerMetrics
 import dev.nutting.kexplore.data.model.NodeMetricsData
 import dev.nutting.kexplore.data.model.PodMetricsData
@@ -14,7 +15,8 @@ class MetricsRepository(private val client: KubernetesClient) {
         try {
             client.top().nodes().metrics().items
             true
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.w(TAG, "Metrics API not available", e)
             false
         }
     }
@@ -39,7 +41,8 @@ class MetricsRepository(private val client: KubernetesClient) {
                     totalMemory = containers.sumOf { it.memoryBytes },
                     timestamp = now,
                 )
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to fetch pod metrics", e)
                 null
             }
         }
@@ -63,12 +66,15 @@ class MetricsRepository(private val client: KubernetesClient) {
                     memoryCapacity = memoryCapacity,
                     timestamp = now,
                 )
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to fetch node metrics", e)
                 null
             }
         }
 
     companion object {
+        private const val TAG = "MetricsRepository"
+
         fun quantityToMillicores(quantity: Quantity?): Long {
             if (quantity == null) return 0
             // getNumericalAmount() returns cores as BigDecimal (e.g. "250m" → 0.250, "1n" → 0.000000001)

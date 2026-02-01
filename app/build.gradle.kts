@@ -73,6 +73,10 @@ android {
         }
     }
 
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
+
     buildTypes {
         getByName("release") {
             signingConfig = try {
@@ -120,6 +124,9 @@ dependencies {
 
     // Charts (Vico)
     implementation("com.patrykandpatrick.vico:compose-m3:2.1.0")
+
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.14.1")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 

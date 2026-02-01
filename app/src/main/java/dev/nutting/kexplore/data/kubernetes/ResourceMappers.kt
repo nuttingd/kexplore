@@ -21,11 +21,13 @@ import io.fabric8.kubernetes.api.model.Secret
 import io.fabric8.kubernetes.api.model.Service
 import io.fabric8.kubernetes.api.model.apps.DaemonSet
 import io.fabric8.kubernetes.api.model.apps.Deployment
+import io.fabric8.kubernetes.api.model.ServiceAccount
 import io.fabric8.kubernetes.api.model.apps.ReplicaSet
 import io.fabric8.kubernetes.api.model.apps.StatefulSet
 import io.fabric8.kubernetes.api.model.autoscaling.v2.HorizontalPodAutoscaler
 import io.fabric8.kubernetes.api.model.batch.v1.CronJob
 import io.fabric8.kubernetes.api.model.batch.v1.Job
+import io.fabric8.kubernetes.api.model.networking.v1.Ingress
 import io.fabric8.kubernetes.api.model.networking.v1.NetworkPolicy
 import io.fabric8.kubernetes.api.model.rbac.ClusterRole
 import io.fabric8.kubernetes.api.model.rbac.ClusterRoleBinding
@@ -176,52 +178,34 @@ object ResourceMappers {
         else -> null
     }
 
+    private fun <T> mapConditions(
+        conditions: List<T>?,
+        type: (T) -> String?,
+        status: (T) -> String?,
+        reason: (T) -> String?,
+        message: (T) -> String?,
+        lastTransitionTime: (T) -> String?,
+    ): List<Condition> = conditions?.map { c ->
+        Condition(
+            type = type(c) ?: "",
+            status = status(c) ?: "",
+            reason = reason(c),
+            message = message(c),
+            lastTransitionTime = lastTransitionTime(c),
+        )
+    } ?: emptyList()
+
     private fun extractConditions(resource: HasMetadata): List<Condition> = when (resource) {
-        is Pod -> resource.status?.conditions?.map {
-            Condition(
-                type = it.type,
-                status = it.status,
-                reason = it.reason,
-                message = it.message,
-                lastTransitionTime = it.lastTransitionTime,
-            )
-        } ?: emptyList()
-        is Deployment -> resource.status?.conditions?.map {
-            Condition(
-                type = it.type,
-                status = it.status,
-                reason = it.reason,
-                message = it.message,
-                lastTransitionTime = it.lastTransitionTime,
-            )
-        } ?: emptyList()
-        is Node -> resource.status?.conditions?.map {
-            Condition(
-                type = it.type,
-                status = it.status,
-                reason = it.reason,
-                message = it.message,
-                lastTransitionTime = it.lastTransitionTime,
-            )
-        } ?: emptyList()
-        is HorizontalPodAutoscaler -> resource.status?.conditions?.map {
-            Condition(
-                type = it.type,
-                status = it.status,
-                reason = it.reason,
-                message = it.message,
-                lastTransitionTime = it.lastTransitionTime,
-            )
-        } ?: emptyList()
-        is Namespace -> resource.status?.conditions?.map {
-            Condition(
-                type = it.type,
-                status = it.status,
-                reason = it.reason,
-                message = it.message,
-                lastTransitionTime = it.lastTransitionTime,
-            )
-        } ?: emptyList()
+        is Pod -> mapConditions(resource.status?.conditions,
+            { it.type }, { it.status }, { it.reason }, { it.message }, { it.lastTransitionTime })
+        is Deployment -> mapConditions(resource.status?.conditions,
+            { it.type }, { it.status }, { it.reason }, { it.message }, { it.lastTransitionTime })
+        is Node -> mapConditions(resource.status?.conditions,
+            { it.type }, { it.status }, { it.reason }, { it.message }, { it.lastTransitionTime })
+        is HorizontalPodAutoscaler -> mapConditions(resource.status?.conditions,
+            { it.type }, { it.status }, { it.reason }, { it.message }, { it.lastTransitionTime })
+        is Namespace -> mapConditions(resource.status?.conditions,
+            { it.type }, { it.status }, { it.reason }, { it.message }, { it.lastTransitionTime })
         else -> emptyList()
     }
 
@@ -435,6 +419,41 @@ object ResourceMappers {
                 limit.max?.forEach { (k, v) -> put("Max $k", v.toString()) }
                 limit.min?.forEach { (k, v) -> put("Min $k", v.toString()) }
             }
+        }
+        is ReplicaSet -> buildMap {
+            val desired = resource.spec?.replicas ?: 0
+            val ready = resource.status?.readyReplicas ?: 0
+            val available = resource.status?.availableReplicas ?: 0
+            put("Replicas", "$ready ready / $desired desired")
+            put("Available Replicas", "$available")
+            resource.spec?.selector?.matchLabels?.let { selectors ->
+                put("Selector", selectors.entries.joinToString(", ") { "${it.key}=${it.value}" })
+            }
+        }
+        is Ingress -> buildMap {
+            resource.spec?.ingressClassName?.let { put("Ingress Class", it) }
+            resource.spec?.defaultBackend?.service?.let { svc ->
+                put("Default Backend", "${svc.name}:${svc.port?.number ?: svc.port?.name ?: ""}")
+            }
+            resource.spec?.tls?.let { tlsList ->
+                put("TLS", tlsList.joinToString(", ") { tls ->
+                    "${tls.hosts?.joinToString(", ") ?: ""} (${tls.secretName ?: "no secret"})"
+                })
+            }
+            resource.spec?.rules?.forEachIndexed { i, rule ->
+                val host = rule.host ?: "*"
+                val paths = rule.http?.paths?.joinToString(", ") { path ->
+                    val backend = path.backend?.service
+                    "${path.path ?: "/"} -> ${backend?.name ?: ""}:${backend?.port?.number ?: backend?.port?.name ?: ""}"
+                } ?: ""
+                put("Rule ${i + 1}", "$host: $paths")
+            }
+        }
+        is ServiceAccount -> buildMap {
+            resource.secrets?.let { secrets ->
+                put("Secrets", secrets.joinToString(", ") { it.name ?: "" })
+            }
+            put("Automount Token", "${resource.automountServiceAccountToken ?: true}")
         }
         else -> emptyMap()
     }

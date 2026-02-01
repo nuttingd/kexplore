@@ -32,7 +32,7 @@ data class UiState(
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
-    val connectionStore = ConnectionStore(application)
+    private val connectionStore = ConnectionStore(application)
 
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()

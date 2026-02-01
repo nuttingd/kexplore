@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 class MetricsCollector(
     private val metricsRepository: MetricsRepository,
@@ -24,6 +26,7 @@ class MetricsCollector(
     private val _metricsAvailable = MutableStateFlow<Boolean?>(null)
     val metricsAvailable: StateFlow<Boolean?> = _metricsAvailable.asStateFlow()
 
+    private val bufferMutex = Mutex()
     private val buffer = ArrayDeque<ResourceMetricsSnapshot>(MAX_SAMPLES)
     private var pollingJob: Job? = null
 
@@ -83,12 +86,14 @@ class MetricsCollector(
         pollingJob = null
     }
 
-    private fun addSnapshot(snapshot: ResourceMetricsSnapshot) {
-        if (buffer.size >= MAX_SAMPLES) {
-            buffer.removeFirst()
+    private suspend fun addSnapshot(snapshot: ResourceMetricsSnapshot) {
+        bufferMutex.withLock {
+            if (buffer.size >= MAX_SAMPLES) {
+                buffer.removeFirst()
+            }
+            buffer.addLast(snapshot)
+            _snapshots.value = buffer.toList()
         }
-        buffer.addLast(snapshot)
-        _snapshots.value = buffer.toList()
     }
 
     companion object {
