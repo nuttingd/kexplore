@@ -25,5 +25,4 @@ For a signed release build, copy `keystore.properties.example` to `keystore.prop
 
 ```sh
 ./gradlew test                        # unit tests
-./gradlew connectedAndroidTest        # instrumented tests (needs a device/emulator)
 ```

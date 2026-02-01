@@ -12,7 +12,6 @@ Kexplore is an Android app for exploring Kubernetes cluster resources. Built wit
 ./gradlew assembleDebug          # debug build
 ./gradlew assembleRelease        # signed release (needs keystore.properties)
 ./gradlew test                   # unit tests
-./gradlew connectedAndroidTest   # instrumented tests (needs device/emulator)
 ./gradlew lintDebug              # lint checks
 ```
 
@@ -24,16 +23,23 @@ Single-module Android app (`app/`) using MVVM with Jetpack Compose.
 
 **Core components:**
 
-- **MainViewModel** — single `UiState` data class exposed as `StateFlow`; drives all UI state.
+- **MainViewModel** — app-level connection state exposed as `StateFlow<UiState>`; owns `KubernetesRepository` and `MetricsRepository` as `StateFlow` properties.
+- **ResourceListViewModel** — fetches and auto-refreshes resource lists for the current resource type.
+- **ResourceDetailViewModel** — fetches a single resource once, derives both detail and YAML views from the same object.
+- **PodExecViewModel** — manages a pod exec session lifecycle (connect, send, close).
+- **PodLogsViewModel** — streams pod logs with channel-based batching and a max-lines cap.
+- **ConnectionViewModel** — manages saved connections via `ConnectionStore`.
+- **KexploreApp** — Application subclass; hosts the shared `ConnectionStore` singleton.
 - **MainActivity** — Compose UI with Scaffold + TopAppBar structure.
-- **KexploreApp** — Application subclass.
 
 **Package:** `dev.nutting.kexplore`
 
 ## Key Patterns
 
-- State flows through a single `UiState` data class in the ViewModel
-- No DI framework; keep things simple until complexity warrants it
+- `MainViewModel` exposes `repository` and `metricsRepository` as `StateFlow` so screens can `collectAsState()` reactively.
+- Screen-level ViewModels (`ResourceListViewModel`, `ResourceDetailViewModel`, etc.) handle data fetching; composables only render state.
+- `ConnectionStore` is a singleton on `KexploreApp`, shared by `MainViewModel` and `ConnectionViewModel`.
+- No DI framework; keep things simple until complexity warrants it.
 
 ## Release Pipeline
 
