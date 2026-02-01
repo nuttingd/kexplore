@@ -9,7 +9,8 @@ import dev.nutting.kexplore.data.connection.ClusterConnection
 import dev.nutting.kexplore.data.connection.ConnectionStore
 import dev.nutting.kexplore.data.kubernetes.KubernetesClientFactory
 import dev.nutting.kexplore.util.ErrorMapper
-import io.fabric8.kubernetes.client.Config
+import io.fabric8.kubernetes.client.internal.KubeConfigUtils
+import io.fabric8.kubernetes.client.utils.Serialization
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -191,16 +192,18 @@ class ConnectionViewModel(application: Application) : AndroidViewModel(applicati
     fun importSelectedContexts(): List<ClusterConnection> {
         val state = _kubeconfigState.value
         val rawContent = state.rawContent ?: return emptyList()
+        val fullConfig = KubeConfigUtils.parseConfigFromString(rawContent)
 
         val connections = state.selectedContexts.map { contextName ->
             val context = state.contexts.first { it.name == contextName }
+            val strippedConfig = stripKubeconfigToContext(fullConfig, contextName)
             ClusterConnection(
                 id = UUID.randomUUID().toString(),
                 name = context.name,
                 server = context.cluster,
                 authMethod = AuthMethod.Kubeconfig(
                     contextName = contextName,
-                    rawKubeconfig = rawContent,
+                    rawKubeconfig = strippedConfig,
                 ),
             )
         }
@@ -208,6 +211,24 @@ class ConnectionViewModel(application: Application) : AndroidViewModel(applicati
         connections.forEach { connectionStore.saveConnection(it) }
         connections.firstOrNull()?.let { connectionStore.setActiveConnectionId(it.id) }
         return connections
+    }
+
+    private fun stripKubeconfigToContext(
+        fullConfig: io.fabric8.kubernetes.api.model.Config,
+        contextName: String,
+    ): String {
+        val namedContext = fullConfig.contexts.first { it.name == contextName }
+        val clusterName = namedContext.context.cluster
+        val userName = namedContext.context.user
+
+        val stripped = io.fabric8.kubernetes.api.model.Config()
+        stripped.apiVersion = fullConfig.apiVersion
+        stripped.kind = fullConfig.kind
+        stripped.currentContext = contextName
+        stripped.contexts = listOf(namedContext)
+        stripped.clusters = fullConfig.clusters.filter { it.name == clusterName }
+        stripped.users = fullConfig.users.filter { it.name == userName }
+        return Serialization.asYaml(stripped)
     }
 
     private fun buildManualConnection(state: ManualConnectionState): ClusterConnection {
@@ -229,69 +250,13 @@ class ConnectionViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     private fun parseKubeconfigContexts(content: String): List<KubeconfigContext> {
-        val config = Config.fromKubeconfig(null, content, null)
-        // Parse contexts from the raw YAML since fabric8 Config only loads one at a time.
-        // We'll extract context names by re-parsing.
-        val contexts = mutableListOf<KubeconfigContext>()
-        val lines = content.lines()
-        var inContexts = false
-        var currentName: String? = null
-        var currentCluster: String? = null
-        var currentUser: String? = null
-
-        for (line in lines) {
-            val trimmed = line.trimStart()
-            if (trimmed == "contexts:") {
-                inContexts = true
-                continue
-            }
-            if (inContexts) {
-                if (trimmed.startsWith("- name:")) {
-                    // Save previous context if exists
-                    if (currentName != null) {
-                        contexts.add(
-                            KubeconfigContext(
-                                name = currentName,
-                                cluster = currentCluster ?: "",
-                                user = currentUser ?: "",
-                            )
-                        )
-                    }
-                    currentName = trimmed.removePrefix("- name:").trim()
-                    currentCluster = null
-                    currentUser = null
-                } else if (trimmed.startsWith("cluster:")) {
-                    currentCluster = trimmed.removePrefix("cluster:").trim()
-                } else if (trimmed.startsWith("user:")) {
-                    currentUser = trimmed.removePrefix("user:").trim()
-                } else if (!trimmed.startsWith("-") && !trimmed.startsWith(" ") && !trimmed.startsWith("context:") && trimmed.isNotEmpty() && !trimmed.startsWith("namespace:")) {
-                    // End of contexts section
-                    inContexts = false
-                }
-            }
-        }
-        // Add last context
-        if (currentName != null) {
-            contexts.add(
-                KubeconfigContext(
-                    name = currentName,
-                    cluster = currentCluster ?: "",
-                    user = currentUser ?: "",
-                )
+        val kubeConfig = KubeConfigUtils.parseConfigFromString(content)
+        return kubeConfig.contexts.map { namedContext ->
+            KubeconfigContext(
+                name = namedContext.name ?: "",
+                cluster = namedContext.context?.cluster ?: "",
+                user = namedContext.context?.user ?: "",
             )
         }
-
-        // Fallback: if parsing didn't find contexts, use the default from fabric8
-        if (contexts.isEmpty()) {
-            contexts.add(
-                KubeconfigContext(
-                    name = config.currentContext?.name ?: "default",
-                    cluster = config.masterUrl ?: "",
-                    user = "",
-                )
-            )
-        }
-
-        return contexts
     }
 }

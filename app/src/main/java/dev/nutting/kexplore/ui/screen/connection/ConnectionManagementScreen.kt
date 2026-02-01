@@ -20,9 +20,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import dev.nutting.kexplore.data.connection.ClusterConnection
 
@@ -36,6 +41,30 @@ fun ConnectionManagementScreen(
     onEdit: (ClusterConnection) -> Unit,
     onDeleted: () -> Unit,
 ) {
+    var connectionToDelete by remember { mutableStateOf<ClusterConnection?>(null) }
+
+    connectionToDelete?.let { connection ->
+        AlertDialog(
+            onDismissRequest = { connectionToDelete = null },
+            title = { Text("Delete Connection") },
+            text = { Text("Delete \"${connection.name}\"? This cannot be undone.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.deleteConnection(connection.id)
+                    connectionToDelete = null
+                    onDeleted()
+                }) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { connectionToDelete = null }) {
+                    Text("Cancel")
+                }
+            },
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -86,8 +115,7 @@ fun ConnectionManagementScreen(
                                     )
                                 }
                                 IconButton(onClick = {
-                                    viewModel.deleteConnection(connection.id)
-                                    onDeleted()
+                                    connectionToDelete = connection
                                 }) {
                                     Icon(
                                         Icons.Default.Delete,
