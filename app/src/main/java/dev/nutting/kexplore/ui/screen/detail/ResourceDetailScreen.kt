@@ -42,6 +42,7 @@ fun ResourceDetailScreen(
     resourceName: String,
     onBack: () -> Unit,
     onViewLogs: (container: String) -> Unit,
+    onExec: (container: String) -> Unit = {},
 ) {
     var detail by remember { mutableStateOf<ContentState<ResourceDetail>>(ContentState.Loading) }
     var yaml by remember { mutableStateOf<ContentState<String>>(ContentState.Loading) }
@@ -52,6 +53,7 @@ fun ResourceDetailScreen(
         add("YAML")
         if (resourceType == ResourceType.Pod) {
             add("Logs")
+            add("Exec")
         }
     }
 
@@ -104,6 +106,9 @@ fun ResourceDetailScreen(
                     namespace = namespace,
                     podName = resourceName,
                 )
+                3 -> ExecTab(onExec = { container ->
+                    onExec(container)
+                }, detail = detail)
             }
         }
     }
@@ -224,6 +229,42 @@ private fun LogsTab(
                 fontFamily = FontFamily.Monospace,
                 modifier = Modifier.fillMaxWidth(),
             )
+        }
+    }
+}
+
+@Composable
+private fun ExecTab(
+    onExec: (container: String) -> Unit,
+    detail: ContentState<ResourceDetail>,
+) {
+    ContentStateHost(state = detail) { resource ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
+            horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+        ) {
+            if (resource.containers.isEmpty()) {
+                Text("No containers found")
+            } else {
+                Text(
+                    text = "Select a container to exec into:",
+                    style = androidx.compose.material3.MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.padding(bottom = 16.dp),
+                )
+                resource.containers.forEach { container ->
+                    androidx.compose.material3.FilledTonalButton(
+                        onClick = { onExec(container.name) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                    ) {
+                        Text(container.name)
+                    }
+                }
+            }
         }
     }
 }

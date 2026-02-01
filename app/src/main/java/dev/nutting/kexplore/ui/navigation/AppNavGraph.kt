@@ -14,6 +14,7 @@ import dev.nutting.kexplore.ui.screen.connection.ConnectionViewModel
 import dev.nutting.kexplore.ui.screen.connection.ImportKubeconfigScreen
 import dev.nutting.kexplore.ui.screen.connection.ManualConnectionScreen
 import dev.nutting.kexplore.ui.screen.detail.ResourceDetailScreen
+import dev.nutting.kexplore.ui.screen.exec.PodExecScreen
 import dev.nutting.kexplore.ui.screen.main.MainScreen
 
 object Routes {
@@ -22,9 +23,13 @@ object Routes {
     const val SETUP_MANUAL = "setup/manual"
     const val MAIN = "main"
     const val RESOURCE_DETAIL = "resource/{namespace}/{kind}/{name}"
+    const val POD_EXEC = "exec/{namespace}/{pod}/{container}"
 
     fun resourceDetail(namespace: String, kind: ResourceType, name: String): String =
         "resource/$namespace/${kind.name}/$name"
+
+    fun podExec(namespace: String, pod: String, container: String): String =
+        "exec/$namespace/$pod/$container"
 }
 
 @Composable
@@ -98,9 +103,31 @@ fun AppNavGraph(
                 resourceType = kind,
                 resourceName = name,
                 onBack = { navController.popBackStack() },
-                onViewLogs = { container ->
-                    // Will be wired in Phase 5
+                onViewLogs = { /* logs are inline in detail screen */ },
+                onExec = { container ->
+                    navController.navigate(Routes.podExec(namespace, name, container))
                 },
+            )
+        }
+
+        composable(
+            route = Routes.POD_EXEC,
+            arguments = listOf(
+                navArgument("namespace") { type = NavType.StringType },
+                navArgument("pod") { type = NavType.StringType },
+                navArgument("container") { type = NavType.StringType },
+            ),
+        ) { backStackEntry ->
+            val namespace = backStackEntry.arguments?.getString("namespace") ?: ""
+            val pod = backStackEntry.arguments?.getString("pod") ?: ""
+            val container = backStackEntry.arguments?.getString("container") ?: ""
+
+            PodExecScreen(
+                repository = mainViewModel.repository,
+                namespace = namespace,
+                podName = pod,
+                container = container.ifEmpty { null },
+                onBack = { navController.popBackStack() },
             )
         }
     }

@@ -94,4 +94,41 @@ class KubernetesRepository(private val client: KubernetesClient) {
         val pod = client.pods().inNamespace(namespace).withName(podName).get()
         return pod.spec.containers.map { it.name }
     }
+
+    suspend fun execCommand(
+        namespace: String,
+        podName: String,
+        container: String?,
+        command: List<String>,
+    ): String = withContext(Dispatchers.IO) {
+        val outputStream = java.io.ByteArrayOutputStream()
+        val errorStream = java.io.ByteArrayOutputStream()
+
+        val execWatch = client.pods()
+            .inNamespace(namespace)
+            .withName(podName)
+            .let { op -> if (container != null) op.inContainer(container) else op }
+            .writingOutput(outputStream)
+            .writingError(errorStream)
+            .exec(*command.toTypedArray())
+
+        // Wait for the exec to complete
+        try {
+            execWatch.exitCode().join()
+        } catch (_: Exception) {
+            // Timeout or interruption
+        } finally {
+            execWatch.close()
+        }
+
+        val stdout = outputStream.toString()
+        val stderr = errorStream.toString()
+        buildString {
+            if (stdout.isNotEmpty()) append(stdout)
+            if (stderr.isNotEmpty()) {
+                if (isNotEmpty()) append("\n")
+                append(stderr)
+            }
+        }
+    }
 }
