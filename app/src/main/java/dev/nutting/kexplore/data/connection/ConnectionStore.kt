@@ -52,9 +52,17 @@ class ConnectionStore(context: Context) {
         prefs.edit().putString(KEY_ACTIVE_CONNECTION, id).apply()
     }
 
+    fun getActiveNamespace(): String? =
+        prefs.getString(KEY_ACTIVE_NAMESPACE, null)
+
+    fun setActiveNamespace(namespace: String) {
+        prefs.edit().putString(KEY_ACTIVE_NAMESPACE, namespace).apply()
+    }
+
     companion object {
         private const val PREFS_NAME = "kexplore_connections"
         private const val KEY_CONNECTIONS = "connections"
         private const val KEY_ACTIVE_CONNECTION = "active_connection_id"
+        private const val KEY_ACTIVE_NAMESPACE = "active_namespace"
     }
 }

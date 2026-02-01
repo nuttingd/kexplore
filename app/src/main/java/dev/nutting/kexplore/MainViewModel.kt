@@ -80,12 +80,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     newClient.namespaces().list().items.map { it.metadata.name }
                 }
 
+                val savedNamespace = connectionStore.getActiveNamespace()
+                val activeNs = when {
+                    // Restore saved namespace (empty string = all namespaces)
+                    savedNamespace != null && (savedNamespace.isEmpty() || namespaces.contains(savedNamespace)) -> savedNamespace
+                    namespaces.contains("default") -> "default"
+                    else -> namespaces.firstOrNull() ?: "default"
+                }
+
                 _uiState.update {
                     it.copy(
                         isConnected = true,
                         namespaces = ContentState.Success(namespaces),
-                        activeNamespace = if (namespaces.contains("default")) "default"
-                        else namespaces.firstOrNull() ?: "default",
+                        activeNamespace = activeNs,
                     )
                 }
             } catch (e: Exception) {
@@ -102,6 +109,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun selectNamespace(namespace: String) {
         _uiState.update { it.copy(activeNamespace = namespace) }
+        connectionStore.setActiveNamespace(namespace)
     }
 
     fun selectTab(tab: BottomTab) {
