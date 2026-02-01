@@ -30,6 +30,7 @@ import com.patrykandpatrick.vico.compose.cartesian.layer.rememberLineCartesianLa
 import com.patrykandpatrick.vico.compose.cartesian.rememberCartesianChart
 import com.patrykandpatrick.vico.core.cartesian.axis.HorizontalAxis
 import com.patrykandpatrick.vico.core.cartesian.axis.VerticalAxis
+import com.patrykandpatrick.vico.compose.cartesian.rememberVicoScrollState
 import com.patrykandpatrick.vico.core.cartesian.data.CartesianChartModelProducer
 import com.patrykandpatrick.vico.core.cartesian.data.lineSeries
 import dev.nutting.kexplore.data.kubernetes.MetricsRepository
@@ -172,6 +173,7 @@ private fun MetricsChartCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(200.dp),
+                scrollState = rememberVicoScrollState(scrollEnabled = false),
             )
 
             Text(
