@@ -21,10 +21,7 @@ import io.fabric8.kubernetes.api.model.batch.v1.JobBuilder
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
 
-@RunWith(RobolectricTestRunner::class)
 class ResourceMappersTest {
 
     @Test
