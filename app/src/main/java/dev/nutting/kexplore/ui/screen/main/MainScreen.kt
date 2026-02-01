@@ -29,7 +29,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun MainScreen(
     viewModel: MainViewModel,
-    onAddConnection: () -> Unit,
+    onManageConnections: () -> Unit,
     onNavigateToDetail: (namespace: String, kind: ResourceType, name: String) -> Unit,
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -49,9 +49,9 @@ fun MainScreen(
                     viewModel.selectNamespace(ns)
                     scope.launch { drawerState.close() }
                 },
-                onAddConnection = {
+                onManageConnections = {
                     scope.launch { drawerState.close() }
-                    onAddConnection()
+                    onManageConnections()
                 },
             )
         },

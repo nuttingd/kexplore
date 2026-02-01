@@ -44,7 +44,7 @@ fun ManualConnectionScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Manual Connection") },
+                title = { Text(if (state.editingConnectionId != null) "Edit Connection" else "Manual Connection") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")

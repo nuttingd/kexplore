@@ -20,6 +20,7 @@ import kotlinx.coroutines.withContext
 import java.util.UUID
 
 data class ManualConnectionState(
+    val editingConnectionId: String? = null,
     val name: String = "",
     val serverUrl: String = "",
     val skipTlsVerify: Boolean = false,
@@ -91,7 +92,60 @@ class ConnectionViewModel(application: Application) : AndroidViewModel(applicati
         val connection = buildManualConnection(state)
         connectionStore.saveConnection(connection)
         connectionStore.setActiveConnectionId(connection.id)
+        resetManualState()
         return connection
+    }
+
+    fun deleteConnection(id: String) {
+        connectionStore.deleteConnection(id)
+        if (connectionStore.getActiveConnectionId() == id) {
+            val remaining = connectionStore.getConnections()
+            connectionStore.setActiveConnectionId(remaining.firstOrNull()?.id)
+        }
+    }
+
+    fun loadConnectionForEdit(connection: ClusterConnection) {
+        val authType: AuthType
+        val token: String
+        val clientCertData: String
+        val clientKeyData: String
+
+        when (val auth = connection.authMethod) {
+            is AuthMethod.BearerToken -> {
+                authType = AuthType.BearerToken
+                token = auth.token
+                clientCertData = ""
+                clientKeyData = ""
+            }
+            is AuthMethod.ClientCertificate -> {
+                authType = AuthType.ClientCertificate
+                token = ""
+                clientCertData = auth.clientCertData
+                clientKeyData = auth.clientKeyData
+            }
+            is AuthMethod.Kubeconfig -> {
+                authType = AuthType.BearerToken
+                token = ""
+                clientCertData = ""
+                clientKeyData = ""
+            }
+        }
+
+        _manualState.value = ManualConnectionState(
+            editingConnectionId = connection.id,
+            name = connection.name,
+            serverUrl = connection.server,
+            skipTlsVerify = connection.skipTlsVerify,
+            authType = authType,
+            token = token,
+            clientCertData = clientCertData,
+            clientKeyData = clientKeyData,
+            caData = connection.certificateAuthorityData ?: "",
+        )
+    }
+
+    fun resetManualState() {
+        _manualState.value = ManualConnectionState()
     }
 
     fun loadKubeconfigFile(uri: Uri) {
@@ -165,7 +219,7 @@ class ConnectionViewModel(application: Application) : AndroidViewModel(applicati
             )
         }
         return ClusterConnection(
-            id = UUID.randomUUID().toString(),
+            id = state.editingConnectionId ?: UUID.randomUUID().toString(),
             name = state.name.ifBlank { state.serverUrl },
             server = state.serverUrl,
             authMethod = authMethod,

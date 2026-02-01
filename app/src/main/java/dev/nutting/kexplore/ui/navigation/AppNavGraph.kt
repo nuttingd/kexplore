@@ -9,6 +9,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import dev.nutting.kexplore.MainViewModel
 import dev.nutting.kexplore.data.model.ResourceType
+import dev.nutting.kexplore.ui.screen.connection.ConnectionManagementScreen
 import dev.nutting.kexplore.ui.screen.connection.ConnectionSetupScreen
 import dev.nutting.kexplore.ui.screen.connection.ConnectionViewModel
 import dev.nutting.kexplore.ui.screen.connection.ImportKubeconfigScreen
@@ -21,6 +22,7 @@ object Routes {
     const val SETUP = "setup"
     const val SETUP_IMPORT = "setup/import"
     const val SETUP_MANUAL = "setup/manual"
+    const val CONNECTIONS = "connections"
     const val MAIN = "main"
     const val RESOURCE_DETAIL = "resource/{namespace}/{kind}/{name}"
     const val POD_EXEC = "exec/{namespace}/{pod}/{container}"
@@ -78,9 +80,25 @@ fun AppNavGraph(
         composable(Routes.MAIN) {
             MainScreen(
                 viewModel = mainViewModel,
-                onAddConnection = { navController.navigate(Routes.SETUP) },
+                onManageConnections = { navController.navigate(Routes.CONNECTIONS) },
                 onNavigateToDetail = { namespace, kind, name ->
                     navController.navigate(Routes.resourceDetail(namespace, kind, name))
+                },
+            )
+        }
+
+        composable(Routes.CONNECTIONS) {
+            ConnectionManagementScreen(
+                viewModel = connectionViewModel,
+                connections = mainViewModel.uiState.value.connections,
+                onBack = { navController.popBackStack() },
+                onAdd = { navController.navigate(Routes.SETUP) },
+                onEdit = { connection ->
+                    connectionViewModel.loadConnectionForEdit(connection)
+                    navController.navigate(Routes.SETUP_MANUAL)
+                },
+                onDeleted = {
+                    mainViewModel.loadConnections()
                 },
             )
         }
