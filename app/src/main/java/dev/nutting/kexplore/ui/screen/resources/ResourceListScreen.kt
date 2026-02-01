@@ -11,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -97,27 +98,31 @@ fun ResourceListScreen(
                     listViewModel.loadResources(repository, effectiveNamespace, selectedType, isConnected, connectionError, isRefresh = true)
                 },
             ) { items ->
-                val filtered = items.filter { summary ->
-                    val matchesName = searchQuery.isBlank() ||
-                        summary.name.contains(searchQuery, ignoreCase = true)
-                    val matchesStatus = statusFilters.isEmpty() ||
-                        summary.status in statusFilters
-                    val matchesLabel = labelFilter.isBlank() || run {
-                        val parts = labelFilter.split("=", limit = 2)
-                        if (parts.size == 2) {
-                            val (key, value) = parts
-                            summary.labels.any { (k, v) ->
-                                k.contains(key, ignoreCase = true) &&
-                                    v.contains(value, ignoreCase = true)
+                val filtered by remember(items, searchQuery, statusFilters, labelFilter) {
+                    derivedStateOf {
+                        items.filter { summary ->
+                            val matchesName = searchQuery.isBlank() ||
+                                summary.name.contains(searchQuery, ignoreCase = true)
+                            val matchesStatus = statusFilters.isEmpty() ||
+                                summary.status in statusFilters
+                            val matchesLabel = labelFilter.isBlank() || run {
+                                val parts = labelFilter.split("=", limit = 2)
+                                if (parts.size == 2) {
+                                    val (key, value) = parts
+                                    summary.labels.any { (k, v) ->
+                                        k.contains(key, ignoreCase = true) &&
+                                            v.contains(value, ignoreCase = true)
+                                    }
+                                } else {
+                                    summary.labels.any { (k, v) ->
+                                        k.contains(labelFilter, ignoreCase = true) ||
+                                            v.contains(labelFilter, ignoreCase = true)
+                                    }
+                                }
                             }
-                        } else {
-                            summary.labels.any { (k, v) ->
-                                k.contains(labelFilter, ignoreCase = true) ||
-                                    v.contains(labelFilter, ignoreCase = true)
-                            }
+                            matchesName && matchesStatus && matchesLabel
                         }
                     }
-                    matchesName && matchesStatus && matchesLabel
                 }
                 if (filtered.isEmpty()) {
                     EmptyContent(message = "No ${selectedType.pluralName} found")

@@ -255,17 +255,21 @@ private fun ContainerCard(container: ContainerInfo) {
 @Composable
 private fun YamlTab(yaml: ContentState<String>) {
     ContentStateHost(state = yaml) { content ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(8.dp),
-        ) {
-            Text(
-                text = content,
-                fontFamily = FontFamily.Monospace,
-                modifier = Modifier.fillMaxWidth(),
-            )
+        val lines = remember(content) { content.lines() }
+        androidx.compose.foundation.text.selection.SelectionContainer {
+            androidx.compose.foundation.lazy.LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(8.dp),
+            ) {
+                items(lines.size) { index ->
+                    Text(
+                        text = lines[index],
+                        fontFamily = FontFamily.Monospace,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
         }
     }
 }

@@ -6,10 +6,13 @@ import dev.nutting.kexplore.data.kubernetes.KubernetesRepository
 import dev.nutting.kexplore.util.ErrorMapper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -27,12 +30,15 @@ class PodLogsViewModel : ViewModel() {
 
     companion object {
         private const val MAX_LINES = 5000
+        private const val BATCH_INTERVAL_MS = 50L
     }
 
     private val _state = MutableStateFlow(PodLogsState())
     val state: StateFlow<PodLogsState> = _state.asStateFlow()
 
     private var streamJob: Job? = null
+    private var batchJob: Job? = null
+    private val lineBuffer = Channel<String>(Channel.UNLIMITED)
 
     fun initialize(
         repository: KubernetesRepository,
@@ -103,10 +109,11 @@ class PodLogsViewModel : ViewModel() {
         val tailLines = _state.value.tailLines
         _state.update { it.copy(isStreaming = true, error = null) }
 
+        startBatchConsumer()
         streamJob = viewModelScope.launch {
             try {
                 repository.streamPodLogs(namespace, podName, container, tailLines).collect { line ->
-                    _state.update { it.copy(lines = (it.lines + line).takeLast(MAX_LINES)) }
+                    lineBuffer.send(line)
                 }
                 _state.update { it.copy(isStreaming = false) }
             } catch (e: Exception) {
@@ -115,13 +122,32 @@ class PodLogsViewModel : ViewModel() {
         }
     }
 
+    private fun startBatchConsumer() {
+        batchJob?.cancel()
+        batchJob = viewModelScope.launch {
+            while (isActive) {
+                delay(BATCH_INTERVAL_MS)
+                val batch = mutableListOf<String>()
+                while (true) {
+                    val line = lineBuffer.tryReceive().getOrNull() ?: break
+                    batch.add(line)
+                }
+                if (batch.isNotEmpty()) {
+                    _state.update { it.copy(lines = (it.lines + batch).takeLast(MAX_LINES)) }
+                }
+            }
+        }
+    }
+
     private fun stopStreaming() {
         streamJob?.cancel()
+        batchJob?.cancel()
         _state.update { it.copy(isStreaming = false) }
     }
 
     override fun onCleared() {
         super.onCleared()
         streamJob?.cancel()
+        batchJob?.cancel()
     }
 }
