@@ -90,10 +90,11 @@ class KubernetesRepository(private val client: KubernetesClient) {
         }
     }.flowOn(Dispatchers.IO)
 
-    fun getContainerNames(namespace: String, podName: String): List<String> {
-        val pod = client.pods().inNamespace(namespace).withName(podName).get()
-        return pod.spec.containers.map { it.name }
-    }
+    suspend fun getContainerNames(namespace: String, podName: String): List<String> =
+        withContext(Dispatchers.IO) {
+            val pod = client.pods().inNamespace(namespace).withName(podName).get()
+            pod.spec.containers.map { it.name }
+        }
 
     suspend fun execCommand(
         namespace: String,

@@ -1,6 +1,8 @@
 package dev.nutting.kexplore.ui.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -16,6 +18,7 @@ import dev.nutting.kexplore.ui.screen.connection.ImportKubeconfigScreen
 import dev.nutting.kexplore.ui.screen.connection.ManualConnectionScreen
 import dev.nutting.kexplore.ui.screen.detail.ResourceDetailScreen
 import dev.nutting.kexplore.ui.screen.exec.PodExecScreen
+import dev.nutting.kexplore.ui.screen.logs.PodLogsScreen
 import dev.nutting.kexplore.ui.screen.main.MainScreen
 
 object Routes {
@@ -25,10 +28,14 @@ object Routes {
     const val CONNECTIONS = "connections"
     const val MAIN = "main"
     const val RESOURCE_DETAIL = "resource/{namespace}/{kind}/{name}"
+    const val POD_LOGS = "logs/{namespace}/{pod}"
     const val POD_EXEC = "exec/{namespace}/{pod}/{container}"
 
     fun resourceDetail(namespace: String, kind: ResourceType, name: String): String =
         "resource/$namespace/${kind.name}/$name"
+
+    fun podLogs(namespace: String, pod: String): String =
+        "logs/$namespace/$pod"
 
     fun podExec(namespace: String, pod: String, container: String): String =
         "exec/$namespace/$pod/$container"
@@ -88,9 +95,10 @@ fun AppNavGraph(
         }
 
         composable(Routes.CONNECTIONS) {
+            val uiState by mainViewModel.uiState.collectAsState()
             ConnectionManagementScreen(
                 viewModel = connectionViewModel,
-                connections = mainViewModel.uiState.value.connections,
+                connections = uiState.connections,
                 onBack = { navController.popBackStack() },
                 onAdd = { navController.navigate(Routes.SETUP) },
                 onEdit = { connection ->
@@ -121,10 +129,31 @@ fun AppNavGraph(
                 resourceType = kind,
                 resourceName = name,
                 onBack = { navController.popBackStack() },
-                onViewLogs = { /* logs are inline in detail screen */ },
+                onViewLogs = { /* logs are inline in detail screen via PodLogsScreen */ },
+                onViewFullScreenLogs = {
+                    navController.navigate(Routes.podLogs(namespace, name))
+                },
                 onExec = { container ->
                     navController.navigate(Routes.podExec(namespace, name, container))
                 },
+            )
+        }
+
+        composable(
+            route = Routes.POD_LOGS,
+            arguments = listOf(
+                navArgument("namespace") { type = NavType.StringType },
+                navArgument("pod") { type = NavType.StringType },
+            ),
+        ) { backStackEntry ->
+            val namespace = backStackEntry.arguments?.getString("namespace") ?: ""
+            val pod = backStackEntry.arguments?.getString("pod") ?: ""
+
+            PodLogsScreen(
+                repository = mainViewModel.repository,
+                namespace = namespace,
+                podName = pod,
+                onBack = { navController.popBackStack() },
             )
         }
 

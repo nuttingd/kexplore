@@ -42,6 +42,7 @@ import dev.nutting.kexplore.ui.components.ContentStateHost
 import dev.nutting.kexplore.ui.components.LabelChipGroup
 import dev.nutting.kexplore.ui.components.MetadataCard
 import dev.nutting.kexplore.ui.components.SectionHeader
+import dev.nutting.kexplore.ui.screen.logs.PodLogsScreen
 import dev.nutting.kexplore.util.ErrorMapper
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -54,6 +55,7 @@ fun ResourceDetailScreen(
     onBack: () -> Unit,
     onViewLogs: (container: String) -> Unit,
     onExec: (container: String) -> Unit = {},
+    onViewFullScreenLogs: () -> Unit = {},
 ) {
     var detail by remember { mutableStateOf<ContentState<ResourceDetail>>(ContentState.Loading) }
     var yaml by remember { mutableStateOf<ContentState<String>>(ContentState.Loading) }
@@ -112,10 +114,11 @@ fun ResourceDetailScreen(
             when (selectedTab) {
                 0 -> OverviewTab(detail = detail, resourceType = resourceType)
                 1 -> YamlTab(yaml = yaml)
-                2 -> LogsTab(
+                2 -> PodLogsScreen(
                     repository = repository,
                     namespace = namespace,
                     podName = resourceName,
+                    embedded = true,
                 )
                 3 -> ExecTab(onExec = { container ->
                     onExec(container)
@@ -252,46 +255,6 @@ private fun YamlTab(yaml: ContentState<String>) {
         ) {
             Text(
                 text = content,
-                fontFamily = FontFamily.Monospace,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-    }
-}
-
-@Composable
-private fun LogsTab(
-    repository: KubernetesRepository?,
-    namespace: String,
-    podName: String,
-) {
-    var logs by remember { mutableStateOf<ContentState<List<String>>>(ContentState.Loading) }
-
-    LaunchedEffect(namespace, podName) {
-        if (repository == null) {
-            logs = ContentState.Error("Not connected")
-            return@LaunchedEffect
-        }
-        try {
-            val lines = mutableListOf<String>()
-            repository.streamPodLogs(namespace, podName).collect { line ->
-                lines.add(line)
-                logs = ContentState.Success(lines.toList())
-            }
-        } catch (e: Exception) {
-            logs = ContentState.Error(ErrorMapper.map(e))
-        }
-    }
-
-    ContentStateHost(state = logs) { lines ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(8.dp),
-        ) {
-            Text(
-                text = lines.joinToString("\n"),
                 fontFamily = FontFamily.Monospace,
                 modifier = Modifier.fillMaxWidth(),
             )
