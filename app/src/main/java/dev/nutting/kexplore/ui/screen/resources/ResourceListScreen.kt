@@ -8,15 +8,15 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import dev.nutting.kexplore.data.kubernetes.KubernetesRepository
-import dev.nutting.kexplore.data.model.ContentState
 import dev.nutting.kexplore.data.model.ResourceCategory
 import dev.nutting.kexplore.data.model.ResourceStatus
 import dev.nutting.kexplore.data.model.ResourceSummary
@@ -26,8 +26,6 @@ import dev.nutting.kexplore.ui.components.EmptyContent
 import dev.nutting.kexplore.ui.components.ResourceListItem
 import dev.nutting.kexplore.ui.components.ResourceTypeChipRow
 import dev.nutting.kexplore.ui.components.SearchFilterBar
-import dev.nutting.kexplore.util.ErrorMapper
-import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -39,47 +37,29 @@ fun ResourceListScreen(
     connectionError: String?,
     modifier: Modifier = Modifier,
     onResourceClick: (ResourceSummary) -> Unit,
+    listViewModel: ResourceListViewModel,
 ) {
     val types = ResourceType.forCategory(category)
     var selectedType by remember(category) { mutableStateOf(types.first()) }
-    var resources by remember { mutableStateOf<ContentState<List<ResourceSummary>>>(ContentState.Loading) }
     var searchQuery by remember { mutableStateOf("") }
     var statusFilters by remember { mutableStateOf(emptySet<ResourceStatus>()) }
     var labelFilter by remember { mutableStateOf("") }
-    var isRefreshing by remember { mutableStateOf(false) }
-    var refreshTrigger by remember { mutableIntStateOf(0) }
+    val listState by listViewModel.state.collectAsState()
 
-    // Cluster-scoped resources ignore namespace; use empty string to signal "no namespace"
     val effectiveNamespace = if (selectedType.isClusterScoped) "" else namespace
 
-    // Load resources on type/namespace/connection change, or manual refresh
-    LaunchedEffect(selectedType, effectiveNamespace, isConnected, refreshTrigger) {
-        if (!isConnected || repository == null) {
-            resources = if (connectionError != null) {
-                ContentState.Error(connectionError)
-            } else {
-                ContentState.Loading
-            }
-            return@LaunchedEffect
-        }
-        if (!isRefreshing) {
-            resources = ContentState.Loading
-        }
-        resources = try {
-            ContentState.Success(repository.getResources(effectiveNamespace, selectedType))
-        } catch (e: Exception) {
-            ContentState.Error(ErrorMapper.map(e))
-        }
-        isRefreshing = false
+    // Load resources on type/namespace/connection change
+    LaunchedEffect(selectedType, effectiveNamespace, isConnected, repository) {
+        listViewModel.loadResources(repository, effectiveNamespace, selectedType, isConnected, connectionError)
     }
 
-    // Auto-refresh every 30s while screen is visible
-    LaunchedEffect(selectedType, effectiveNamespace, isConnected) {
-        if (!isConnected || repository == null) return@LaunchedEffect
-        while (true) {
-            delay(30_000)
-            refreshTrigger++
-        }
+    // Auto-refresh while screen is visible
+    LaunchedEffect(selectedType, effectiveNamespace, isConnected, repository) {
+        listViewModel.startAutoRefresh(repository, effectiveNamespace, selectedType, isConnected, connectionError)
+    }
+
+    DisposableEffect(Unit) {
+        onDispose { listViewModel.stopAutoRefresh() }
     }
 
     Column(modifier = modifier.fillMaxSize()) {
@@ -105,28 +85,23 @@ fun ResourceListScreen(
         )
 
         PullToRefreshBox(
-            isRefreshing = isRefreshing,
+            isRefreshing = listState.isRefreshing,
             onRefresh = {
-                isRefreshing = true
-                refreshTrigger++
+                listViewModel.loadResources(repository, effectiveNamespace, selectedType, isConnected, connectionError, isRefresh = true)
             },
             modifier = Modifier.fillMaxSize(),
         ) {
             ContentStateHost(
-                state = resources,
+                state = listState.resources,
                 onRetry = {
-                    isRefreshing = true
-                    refreshTrigger++
+                    listViewModel.loadResources(repository, effectiveNamespace, selectedType, isConnected, connectionError, isRefresh = true)
                 },
             ) { items ->
                 val filtered = items.filter { summary ->
-                    // Name search
                     val matchesName = searchQuery.isBlank() ||
                         summary.name.contains(searchQuery, ignoreCase = true)
-                    // Status filter
                     val matchesStatus = statusFilters.isEmpty() ||
                         summary.status in statusFilters
-                    // Label filter (key=value matching)
                     val matchesLabel = labelFilter.isBlank() || run {
                         val parts = labelFilter.split("=", limit = 2)
                         if (parts.size == 2) {

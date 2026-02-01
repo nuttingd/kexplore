@@ -25,9 +25,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -44,7 +44,6 @@ import dev.nutting.kexplore.ui.components.LabelChipGroup
 import dev.nutting.kexplore.ui.components.MetadataCard
 import dev.nutting.kexplore.ui.components.SectionHeader
 import dev.nutting.kexplore.ui.screen.logs.PodLogsScreen
-import dev.nutting.kexplore.util.ErrorMapper
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -55,12 +54,11 @@ fun ResourceDetailScreen(
     resourceType: ResourceType,
     resourceName: String,
     onBack: () -> Unit,
-    onViewLogs: (container: String) -> Unit,
     onExec: (container: String) -> Unit = {},
     onViewFullScreenLogs: () -> Unit = {},
+    detailViewModel: ResourceDetailViewModel,
 ) {
-    var detail by remember { mutableStateOf<ContentState<ResourceDetail>>(ContentState.Loading) }
-    var yaml by remember { mutableStateOf<ContentState<String>>(ContentState.Loading) }
+    val detailState by detailViewModel.state.collectAsState()
     var selectedTab by remember { mutableIntStateOf(0) }
 
     val hasMetrics = resourceType == ResourceType.Pod || resourceType == ResourceType.Node
@@ -77,17 +75,7 @@ fun ResourceDetailScreen(
     }
 
     LaunchedEffect(namespace, resourceType, resourceName) {
-        if (repository == null) {
-            detail = ContentState.Error("Not connected")
-            return@LaunchedEffect
-        }
-        try {
-            detail = ContentState.Success(repository.getResourceDetail(namespace, resourceType, resourceName))
-            yaml = ContentState.Success(repository.getResourceYaml(namespace, resourceType, resourceName))
-        } catch (e: Exception) {
-            detail = ContentState.Error(ErrorMapper.map(e))
-            yaml = ContentState.Error(ErrorMapper.map(e))
-        }
+        detailViewModel.loadResource(repository, namespace, resourceType, resourceName)
     }
 
     Scaffold(
@@ -118,8 +106,12 @@ fun ResourceDetailScreen(
             }
 
             when (tabs.getOrNull(selectedTab)) {
-                "Overview" -> OverviewTab(detail = detail, resourceType = resourceType)
-                "YAML" -> YamlTab(yaml = yaml)
+                "Overview" -> OverviewTab(
+                    detail = detailState.detail,
+                    resourceType = resourceType,
+                    onRetry = { detailViewModel.retry(repository) },
+                )
+                "YAML" -> YamlTab(yaml = detailState.yaml)
                 "Metrics" -> MetricsTab(
                     metricsRepository = metricsRepository,
                     namespace = namespace,
@@ -134,15 +126,19 @@ fun ResourceDetailScreen(
                 )
                 "Exec" -> ExecTab(onExec = { container ->
                     onExec(container)
-                }, detail = detail)
+                }, detail = detailState.detail)
             }
         }
     }
 }
 
 @Composable
-private fun OverviewTab(detail: ContentState<ResourceDetail>, resourceType: ResourceType) {
-    ContentStateHost(state = detail) { resource ->
+private fun OverviewTab(
+    detail: ContentState<ResourceDetail>,
+    resourceType: ResourceType,
+    onRetry: () -> Unit = {},
+) {
+    ContentStateHost(state = detail, onRetry = onRetry) { resource ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -311,7 +307,7 @@ private fun ExecTab(
 }
 
 @Composable
-private fun DetailRow(label: String, value: String) {
+internal fun DetailRow(label: String, value: String) {
     Column(modifier = Modifier.padding(vertical = 2.dp)) {
         Text(
             text = label,

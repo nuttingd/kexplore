@@ -4,7 +4,6 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import dev.nutting.kexplore.data.connection.ClusterConnection
-import dev.nutting.kexplore.data.connection.ConnectionStore
 import dev.nutting.kexplore.data.kubernetes.KubernetesClientFactory
 import dev.nutting.kexplore.data.kubernetes.KubernetesRepository
 import dev.nutting.kexplore.data.kubernetes.MetricsRepository
@@ -34,18 +33,19 @@ data class UiState(
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val connectionStore = ConnectionStore(application)
+    private val connectionStore = getApplication<KexploreApp>().connectionStore
 
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
     private var connectJob: Job? = null
     private var client: KubernetesClient? = null
-    private var _repository: KubernetesRepository? = null
-    val repository: KubernetesRepository? get() = _repository
 
-    private var _metricsRepository: MetricsRepository? = null
-    val metricsRepository: MetricsRepository? get() = _metricsRepository
+    private val _repository = MutableStateFlow<KubernetesRepository?>(null)
+    val repository: StateFlow<KubernetesRepository?> = _repository.asStateFlow()
+
+    private val _metricsRepository = MutableStateFlow<MetricsRepository?>(null)
+    val metricsRepository: StateFlow<MetricsRepository?> = _metricsRepository.asStateFlow()
 
     init {
         loadConnections()
@@ -82,8 +82,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 client?.close()
                 client = newClient
-                _repository = KubernetesRepository(newClient)
-                _metricsRepository = MetricsRepository(newClient)
+                _repository.value = KubernetesRepository(newClient)
+                _metricsRepository.value = MetricsRepository(newClient)
 
                 val namespaces = withContext(Dispatchers.IO) {
                     newClient.namespaces().list().items.map { it.metadata.name }

@@ -24,6 +24,8 @@ import dev.nutting.kexplore.data.model.ResourceType
 import dev.nutting.kexplore.ui.navigation.BottomTab
 import dev.nutting.kexplore.ui.screen.resources.ResourceListScreen
 import kotlinx.coroutines.launch
+import androidx.lifecycle.viewmodel.compose.viewModel
+import dev.nutting.kexplore.ui.screen.resources.ResourceListViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -33,8 +35,10 @@ fun MainScreen(
     onNavigateToDetail: (namespace: String, kind: ResourceType, name: String) -> Unit,
 ) {
     val state by viewModel.uiState.collectAsState()
+    val repository by viewModel.repository.collectAsState()
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
+    val resourceListViewModel: ResourceListViewModel = viewModel()
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -94,7 +98,7 @@ fun MainScreen(
             },
         ) { padding ->
             ResourceListScreen(
-                repository = viewModel.repository,
+                repository = repository,
                 namespace = state.activeNamespace,
                 category = state.selectedTab.category,
                 isConnected = state.isConnected,
@@ -103,6 +107,7 @@ fun MainScreen(
                 onResourceClick = { summary ->
                     onNavigateToDetail(summary.namespace, summary.kind, summary.name)
                 },
+                listViewModel = resourceListViewModel,
             )
         }
     }

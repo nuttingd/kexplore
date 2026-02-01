@@ -17,7 +17,9 @@ import dev.nutting.kexplore.ui.screen.connection.ConnectionViewModel
 import dev.nutting.kexplore.ui.screen.connection.ImportKubeconfigScreen
 import dev.nutting.kexplore.ui.screen.connection.ManualConnectionScreen
 import dev.nutting.kexplore.ui.screen.detail.ResourceDetailScreen
+import dev.nutting.kexplore.ui.screen.detail.ResourceDetailViewModel
 import dev.nutting.kexplore.ui.screen.exec.PodExecScreen
+import dev.nutting.kexplore.ui.screen.exec.PodExecViewModel
 import dev.nutting.kexplore.ui.screen.logs.PodLogsScreen
 import dev.nutting.kexplore.ui.screen.main.MainScreen
 
@@ -58,7 +60,10 @@ fun AppNavGraph(
         composable(Routes.SETUP) {
             ConnectionSetupScreen(
                 onImportKubeconfig = { navController.navigate(Routes.SETUP_IMPORT) },
-                onManualEntry = { navController.navigate(Routes.SETUP_MANUAL) },
+                onManualEntry = {
+                    connectionViewModel.resetManualState()
+                    navController.navigate(Routes.SETUP_MANUAL)
+                },
             )
         }
 
@@ -104,7 +109,10 @@ fun AppNavGraph(
                 viewModel = connectionViewModel,
                 connections = uiState.connections,
                 onBack = { navController.popBackStack() },
-                onAdd = { navController.navigate(Routes.SETUP) },
+                onAdd = {
+                    connectionViewModel.resetManualState()
+                    navController.navigate(Routes.SETUP)
+                },
                 onEdit = { connection ->
                     connectionViewModel.loadConnectionForEdit(connection)
                     navController.navigate(Routes.SETUP_MANUAL)
@@ -130,21 +138,24 @@ fun AppNavGraph(
                 ResourceType.valueOf(backStackEntry.arguments?.getString("kind") ?: "Pod")
             }.getOrDefault(ResourceType.Pod)
             val name = backStackEntry.arguments?.getString("name") ?: ""
+            val repository by mainViewModel.repository.collectAsState()
+            val metricsRepository by mainViewModel.metricsRepository.collectAsState()
+            val detailViewModel: ResourceDetailViewModel = viewModel()
 
             ResourceDetailScreen(
-                repository = mainViewModel.repository,
-                metricsRepository = mainViewModel.metricsRepository,
+                repository = repository,
+                metricsRepository = metricsRepository,
                 namespace = namespace,
                 resourceType = kind,
                 resourceName = name,
                 onBack = { navController.popBackStack() },
-                onViewLogs = { /* logs are inline in detail screen via PodLogsScreen */ },
                 onViewFullScreenLogs = {
                     navController.navigate(Routes.podLogs(namespace, name))
                 },
                 onExec = { container ->
                     navController.navigate(Routes.podExec(namespace, name, container))
                 },
+                detailViewModel = detailViewModel,
             )
         }
 
@@ -157,9 +168,10 @@ fun AppNavGraph(
         ) { backStackEntry ->
             val namespace = backStackEntry.arguments?.getString("namespace") ?: ""
             val pod = backStackEntry.arguments?.getString("pod") ?: ""
+            val repository by mainViewModel.repository.collectAsState()
 
             PodLogsScreen(
-                repository = mainViewModel.repository,
+                repository = repository,
                 namespace = namespace,
                 podName = pod,
                 onBack = { navController.popBackStack() },
@@ -177,13 +189,16 @@ fun AppNavGraph(
             val namespace = backStackEntry.arguments?.getString("namespace") ?: ""
             val pod = backStackEntry.arguments?.getString("pod") ?: ""
             val container = backStackEntry.arguments?.getString("container") ?: ""
+            val repository by mainViewModel.repository.collectAsState()
+            val execViewModel: PodExecViewModel = viewModel()
 
             PodExecScreen(
-                repository = mainViewModel.repository,
+                repository = repository,
                 namespace = namespace,
                 podName = pod,
                 container = container.ifEmpty { null },
                 onBack = { navController.popBackStack() },
+                execViewModel = execViewModel,
             )
         }
     }

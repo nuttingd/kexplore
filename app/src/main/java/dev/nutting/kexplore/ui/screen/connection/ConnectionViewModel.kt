@@ -4,9 +4,9 @@ import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import dev.nutting.kexplore.KexploreApp
 import dev.nutting.kexplore.data.connection.AuthMethod
 import dev.nutting.kexplore.data.connection.ClusterConnection
-import dev.nutting.kexplore.data.connection.ConnectionStore
 import dev.nutting.kexplore.data.kubernetes.KubernetesClientFactory
 import dev.nutting.kexplore.util.ErrorMapper
 import io.fabric8.kubernetes.client.internal.KubeConfigUtils
@@ -54,7 +54,7 @@ data class KubeconfigContext(
 
 class ConnectionViewModel(application: Application) : AndroidViewModel(application) {
 
-    val connectionStore = ConnectionStore(application)
+    val connectionStore = getApplication<KexploreApp>().connectionStore
 
     private val _manualState = MutableStateFlow(ManualConnectionState())
     val manualState: StateFlow<ManualConnectionState> = _manualState.asStateFlow()

@@ -20,28 +20,17 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import dev.nutting.kexplore.data.kubernetes.ExecSession
 import dev.nutting.kexplore.data.kubernetes.KubernetesRepository
 import dev.nutting.kexplore.ui.components.TerminalView
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-
-private val ANSI_ESCAPE_REGEX = Regex("\u001b\\[[0-9;]*[a-zA-Z]")
-private const val MAX_LINES = 5000
-
-private fun stripAnsi(text: String): String = ANSI_ESCAPE_REGEX.replace(text, "")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -51,78 +40,14 @@ fun PodExecScreen(
     podName: String,
     container: String?,
     onBack: () -> Unit,
+    execViewModel: PodExecViewModel,
 ) {
-    var lines by remember { mutableStateOf(listOf<String>()) }
     var command by remember { mutableStateOf("") }
-    var commandHistory by remember { mutableStateOf(listOf<String>()) }
     var showHistory by remember { mutableStateOf(false) }
-    var session by remember { mutableStateOf<ExecSession?>(null) }
-    var error by remember { mutableStateOf<String?>(null) }
-    val scope = rememberCoroutineScope()
+    val state by execViewModel.state.collectAsState()
 
-    // Start interactive session
     LaunchedEffect(namespace, podName, container) {
-        if (repository == null) {
-            error = "Not connected"
-            return@LaunchedEffect
-        }
-        try {
-            val execSession = repository.execInteractive(namespace, podName, container)
-            session = execSession
-            lines = lines + "Connected to $podName (interactive shell)"
-
-            // Read stdout in background
-            withContext(Dispatchers.IO) {
-                val reader = execSession.stdout.bufferedReader()
-                val buffer = StringBuilder()
-                val charBuf = CharArray(4096)
-                while (isActive) {
-                    val count = try {
-                        reader.read(charBuf)
-                    } catch (_: Exception) {
-                        -1
-                    }
-                    if (count == -1) break
-                    buffer.append(charBuf, 0, count)
-                    val text = stripAnsi(buffer.toString())
-                    buffer.clear()
-                    val newLines = text.split("\n")
-                    withContext(Dispatchers.Main) {
-                        lines = (lines + newLines).takeLast(MAX_LINES)
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            error = "Failed to start shell: ${e.message}"
-        }
-    }
-
-    // Also read stderr
-    LaunchedEffect(session) {
-        val s = session ?: return@LaunchedEffect
-        withContext(Dispatchers.IO) {
-            val reader = s.stderr.bufferedReader()
-            val charBuf = CharArray(4096)
-            while (isActive) {
-                val count = try {
-                    reader.read(charBuf)
-                } catch (_: Exception) {
-                    -1
-                }
-                if (count == -1) break
-                val text = stripAnsi(String(charBuf, 0, count))
-                val newLines = text.split("\n")
-                withContext(Dispatchers.Main) {
-                    lines = (lines + newLines).takeLast(MAX_LINES)
-                }
-            }
-        }
-    }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            session?.close()
-        }
+        execViewModel.connect(repository, namespace, podName, container)
     }
 
     Scaffold(
@@ -131,7 +56,7 @@ fun PodExecScreen(
                 title = { Text("Exec: $podName") },
                 navigationIcon = {
                     IconButton(onClick = {
-                        session?.close()
+                        execViewModel.closeSession()
                         onBack()
                     }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -147,11 +72,11 @@ fun PodExecScreen(
         ) {
             // Terminal output area
             TerminalView(
-                lines = lines,
+                lines = state.lines,
                 modifier = Modifier.weight(1f),
             )
 
-            error?.let {
+            state.error?.let {
                 Text(
                     text = it,
                     color = MaterialTheme.colorScheme.error,
@@ -167,7 +92,7 @@ fun PodExecScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 // History button
-                if (commandHistory.isNotEmpty()) {
+                if (state.commandHistory.isNotEmpty()) {
                     IconButton(onClick = { showHistory = !showHistory }) {
                         Icon(Icons.Default.History, contentDescription = "Command history")
                     }
@@ -175,7 +100,7 @@ fun PodExecScreen(
                         expanded = showHistory,
                         onDismissRequest = { showHistory = false },
                     ) {
-                        commandHistory.reversed().take(20).forEach { histCmd ->
+                        state.commandHistory.reversed().take(20).forEach { histCmd ->
                             DropdownMenuItem(
                                 text = { Text(histCmd) },
                                 onClick = {
@@ -196,21 +121,9 @@ fun PodExecScreen(
                 )
                 IconButton(
                     onClick = {
-                        val s = session ?: return@IconButton
-                        if (command.isBlank()) return@IconButton
-                        val cmd = command
-                        command = ""
-                        commandHistory = commandHistory + cmd
-
-                        scope.launch(Dispatchers.IO) {
-                            try {
-                                s.stdin.write("$cmd\n".toByteArray())
-                                s.stdin.flush()
-                            } catch (e: Exception) {
-                                withContext(Dispatchers.Main) {
-                                    error = "Write error: ${e.message}"
-                                }
-                            }
+                        if (command.isNotBlank()) {
+                            execViewModel.sendCommand(command)
+                            command = ""
                         }
                     },
                 ) {
