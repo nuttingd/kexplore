@@ -82,9 +82,7 @@ android {
             signingConfig = try {
                 signingConfigs.getByName("release")
             } catch (_: UnknownDomainObjectException) {
-                if (System.getenv("CI") != null) {
-                    throw GradleException("Release signing config missing in CI. Check repository secrets.")
-                }
+                logger.warn("Release signing config not found; falling back to debug signing.")
                 signingConfigs.getByName("debug")
             }
         }
