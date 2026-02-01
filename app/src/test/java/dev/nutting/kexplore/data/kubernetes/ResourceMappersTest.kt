@@ -2,14 +2,21 @@ package dev.nutting.kexplore.data.kubernetes
 
 import dev.nutting.kexplore.data.model.ResourceStatus
 import dev.nutting.kexplore.data.model.ResourceType
+import io.fabric8.kubernetes.api.model.NamespaceBuilder
 import io.fabric8.kubernetes.api.model.NodeBuilder
 import io.fabric8.kubernetes.api.model.NodeConditionBuilder
 import io.fabric8.kubernetes.api.model.ObjectMetaBuilder
+import io.fabric8.kubernetes.api.model.PersistentVolumeBuilder
+import io.fabric8.kubernetes.api.model.PersistentVolumeClaimBuilder
 import io.fabric8.kubernetes.api.model.PodBuilder
 import io.fabric8.kubernetes.api.model.PodConditionBuilder
+import io.fabric8.kubernetes.api.model.apps.DaemonSetBuilder
 import io.fabric8.kubernetes.api.model.apps.DeploymentBuilder
 import io.fabric8.kubernetes.api.model.apps.DeploymentConditionBuilder
 import io.fabric8.kubernetes.api.model.apps.ReplicaSetBuilder
+import io.fabric8.kubernetes.api.model.apps.StatefulSetBuilder
+import io.fabric8.kubernetes.api.model.autoscaling.v2.HorizontalPodAutoscalerBuilder
+import io.fabric8.kubernetes.api.model.autoscaling.v2.HorizontalPodAutoscalerConditionBuilder
 import io.fabric8.kubernetes.api.model.batch.v1.JobBuilder
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -363,5 +370,278 @@ class ResourceMappersTest {
         assertEquals("2 ready / 2 desired", detail.spec["Replicas"])
         assertEquals("2", detail.spec["Available Replicas"])
         assertEquals("app=api", detail.spec["Selector"])
+    }
+
+    // --- StatefulSet ---
+
+    @Test
+    fun `inferStatus - StatefulSet running when all replicas ready`() {
+        val ss = StatefulSetBuilder()
+            .withNewMetadata().withName("ss").endMetadata()
+            .withNewSpec().withReplicas(3).endSpec()
+            .withNewStatus().withReadyReplicas(3).endStatus()
+            .build()
+
+        val summary = ResourceMappers.toSummary(ss, ResourceType.StatefulSet)
+        assertEquals(ResourceStatus.Running, summary.status)
+    }
+
+    @Test
+    fun `inferStatus - StatefulSet pending when not all replicas ready`() {
+        val ss = StatefulSetBuilder()
+            .withNewMetadata().withName("ss").endMetadata()
+            .withNewSpec().withReplicas(3).endSpec()
+            .withNewStatus().withReadyReplicas(1).endStatus()
+            .build()
+
+        val summary = ResourceMappers.toSummary(ss, ResourceType.StatefulSet)
+        assertEquals(ResourceStatus.Pending, summary.status)
+    }
+
+    // --- DaemonSet ---
+
+    @Test
+    fun `inferStatus - DaemonSet running when all nodes ready`() {
+        val ds = DaemonSetBuilder()
+            .withNewMetadata().withName("ds").endMetadata()
+            .withNewStatus()
+            .withDesiredNumberScheduled(5)
+            .withNumberReady(5)
+            .endStatus()
+            .build()
+
+        val summary = ResourceMappers.toSummary(ds, ResourceType.DaemonSet)
+        assertEquals(ResourceStatus.Running, summary.status)
+    }
+
+    @Test
+    fun `inferStatus - DaemonSet pending when not all ready`() {
+        val ds = DaemonSetBuilder()
+            .withNewMetadata().withName("ds").endMetadata()
+            .withNewStatus()
+            .withDesiredNumberScheduled(5)
+            .withNumberReady(3)
+            .endStatus()
+            .build()
+
+        val summary = ResourceMappers.toSummary(ds, ResourceType.DaemonSet)
+        assertEquals(ResourceStatus.Pending, summary.status)
+    }
+
+    // --- Namespace ---
+
+    @Test
+    fun `inferStatus - Namespace Active`() {
+        val ns = NamespaceBuilder()
+            .withNewMetadata().withName("default").endMetadata()
+            .withNewStatus().withPhase("Active").endStatus()
+            .build()
+
+        val summary = ResourceMappers.toSummary(ns, ResourceType.Namespace)
+        assertEquals(ResourceStatus.Running, summary.status)
+    }
+
+    @Test
+    fun `inferStatus - Namespace Terminating`() {
+        val ns = NamespaceBuilder()
+            .withNewMetadata().withName("old").endMetadata()
+            .withNewStatus().withPhase("Terminating").endStatus()
+            .build()
+
+        val summary = ResourceMappers.toSummary(ns, ResourceType.Namespace)
+        assertEquals(ResourceStatus.Terminating, summary.status)
+    }
+
+    // --- PersistentVolume ---
+
+    @Test
+    fun `inferStatus - PV Bound`() {
+        val pv = PersistentVolumeBuilder()
+            .withNewMetadata().withName("pv").endMetadata()
+            .withNewStatus().withPhase("Bound").endStatus()
+            .build()
+
+        val summary = ResourceMappers.toSummary(pv, ResourceType.PersistentVolume)
+        assertEquals(ResourceStatus.Running, summary.status)
+    }
+
+    @Test
+    fun `inferStatus - PV Available`() {
+        val pv = PersistentVolumeBuilder()
+            .withNewMetadata().withName("pv").endMetadata()
+            .withNewStatus().withPhase("Available").endStatus()
+            .build()
+
+        val summary = ResourceMappers.toSummary(pv, ResourceType.PersistentVolume)
+        assertEquals(ResourceStatus.Running, summary.status)
+    }
+
+    @Test
+    fun `inferStatus - PV Released`() {
+        val pv = PersistentVolumeBuilder()
+            .withNewMetadata().withName("pv").endMetadata()
+            .withNewStatus().withPhase("Released").endStatus()
+            .build()
+
+        val summary = ResourceMappers.toSummary(pv, ResourceType.PersistentVolume)
+        assertEquals(ResourceStatus.Pending, summary.status)
+    }
+
+    @Test
+    fun `inferStatus - PV Failed`() {
+        val pv = PersistentVolumeBuilder()
+            .withNewMetadata().withName("pv").endMetadata()
+            .withNewStatus().withPhase("Failed").endStatus()
+            .build()
+
+        val summary = ResourceMappers.toSummary(pv, ResourceType.PersistentVolume)
+        assertEquals(ResourceStatus.Failed, summary.status)
+    }
+
+    // --- PersistentVolumeClaim ---
+
+    @Test
+    fun `inferStatus - PVC Bound`() {
+        val pvc = PersistentVolumeClaimBuilder()
+            .withNewMetadata().withName("pvc").withNamespace("default").endMetadata()
+            .withNewStatus().withPhase("Bound").endStatus()
+            .build()
+
+        val summary = ResourceMappers.toSummary(pvc, ResourceType.PersistentVolumeClaim)
+        assertEquals(ResourceStatus.Running, summary.status)
+    }
+
+    @Test
+    fun `inferStatus - PVC Pending`() {
+        val pvc = PersistentVolumeClaimBuilder()
+            .withNewMetadata().withName("pvc").withNamespace("default").endMetadata()
+            .withNewStatus().withPhase("Pending").endStatus()
+            .build()
+
+        val summary = ResourceMappers.toSummary(pvc, ResourceType.PersistentVolumeClaim)
+        assertEquals(ResourceStatus.Pending, summary.status)
+    }
+
+    @Test
+    fun `inferStatus - PVC Lost`() {
+        val pvc = PersistentVolumeClaimBuilder()
+            .withNewMetadata().withName("pvc").withNamespace("default").endMetadata()
+            .withNewStatus().withPhase("Lost").endStatus()
+            .build()
+
+        val summary = ResourceMappers.toSummary(pvc, ResourceType.PersistentVolumeClaim)
+        assertEquals(ResourceStatus.Failed, summary.status)
+    }
+
+    // --- HorizontalPodAutoscaler ---
+
+    @Test
+    fun `inferStatus - HPA active`() {
+        val hpa = HorizontalPodAutoscalerBuilder()
+            .withNewMetadata().withName("hpa").withNamespace("default").endMetadata()
+            .withNewStatus()
+            .withConditions(
+                HorizontalPodAutoscalerConditionBuilder()
+                    .withType("ScalingActive")
+                    .withStatus("True")
+                    .build()
+            )
+            .endStatus()
+            .build()
+
+        val summary = ResourceMappers.toSummary(hpa, ResourceType.HorizontalPodAutoscaler)
+        assertEquals(ResourceStatus.Running, summary.status)
+    }
+
+    @Test
+    fun `inferStatus - HPA not active`() {
+        val hpa = HorizontalPodAutoscalerBuilder()
+            .withNewMetadata().withName("hpa").withNamespace("default").endMetadata()
+            .withNewStatus()
+            .withConditions(
+                HorizontalPodAutoscalerConditionBuilder()
+                    .withType("ScalingActive")
+                    .withStatus("False")
+                    .build()
+            )
+            .endStatus()
+            .build()
+
+        val summary = ResourceMappers.toSummary(hpa, ResourceType.HorizontalPodAutoscaler)
+        assertEquals(ResourceStatus.Pending, summary.status)
+    }
+
+    // --- restartCount ---
+
+    @Test
+    fun `restartCount - sums across containers`() {
+        val pod = PodBuilder()
+            .withNewMetadata().withName("p").endMetadata()
+            .withNewSpec()
+            .addNewContainer().withName("c1").endContainer()
+            .addNewContainer().withName("c2").endContainer()
+            .endSpec()
+            .withNewStatus()
+            .withPhase("Running")
+            .addNewContainerStatus().withName("c1").withReady(true).withRestartCount(3).endContainerStatus()
+            .addNewContainerStatus().withName("c2").withReady(true).withRestartCount(7).endContainerStatus()
+            .endStatus()
+            .build()
+
+        val summary = ResourceMappers.toSummary(pod, ResourceType.Pod)
+        assertEquals(10, summary.restarts)
+    }
+
+    @Test
+    fun `restartCount - returns null for non-Pod`() {
+        val node = NodeBuilder()
+            .withNewMetadata().withName("n").endMetadata()
+            .withNewStatus()
+            .withConditions(
+                NodeConditionBuilder().withType("Ready").withStatus("True").build()
+            )
+            .endStatus()
+            .build()
+
+        val summary = ResourceMappers.toSummary(node, ResourceType.Node)
+        assertNull(summary.restarts)
+    }
+
+    // --- Null/edge cases ---
+
+    @Test
+    fun `inferStatus - Pod with null status phase and no deletionTimestamp returns Unknown`() {
+        val pod = PodBuilder()
+            .withNewMetadata().withName("p").endMetadata()
+            .build()
+
+        val summary = ResourceMappers.toSummary(pod, ResourceType.Pod)
+        assertEquals(ResourceStatus.Unknown, summary.status)
+    }
+
+    @Test
+    fun `readyCount - StatefulSet returns ready count`() {
+        val ss = StatefulSetBuilder()
+            .withNewMetadata().withName("ss").endMetadata()
+            .withNewSpec().withReplicas(3).endSpec()
+            .withNewStatus().withReadyReplicas(2).endStatus()
+            .build()
+
+        val summary = ResourceMappers.toSummary(ss, ResourceType.StatefulSet)
+        assertEquals("2/3", summary.readyCount)
+    }
+
+    @Test
+    fun `readyCount - DaemonSet returns ready count`() {
+        val ds = DaemonSetBuilder()
+            .withNewMetadata().withName("ds").endMetadata()
+            .withNewStatus()
+            .withDesiredNumberScheduled(4)
+            .withNumberReady(3)
+            .endStatus()
+            .build()
+
+        val summary = ResourceMappers.toSummary(ds, ResourceType.DaemonSet)
+        assertEquals("3/4", summary.readyCount)
     }
 }
