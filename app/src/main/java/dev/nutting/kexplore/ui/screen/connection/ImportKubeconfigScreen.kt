@@ -70,11 +70,11 @@ fun ImportKubeconfigScreen(
         ) {
             FilledTonalButton(
                 onClick = {
-                    val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                    val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
                         addCategory(Intent.CATEGORY_OPENABLE)
                         type = "*/*"
                     }
-                    filePicker.launch(intent)
+                    filePicker.launch(Intent.createChooser(intent, "Select kubeconfig file"))
                 },
                 modifier = Modifier.fillMaxWidth(),
             ) {
