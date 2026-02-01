@@ -126,7 +126,9 @@ fun AppNavGraph(
             val namespace = backStackEntry.arguments?.getString("namespace")?.let {
                 if (it == Routes.CLUSTER_SCOPE_SENTINEL) "" else it
             } ?: ""
-            val kind = ResourceType.valueOf(backStackEntry.arguments?.getString("kind") ?: "Pod")
+            val kind = runCatching {
+                ResourceType.valueOf(backStackEntry.arguments?.getString("kind") ?: "Pod")
+            }.getOrDefault(ResourceType.Pod)
             val name = backStackEntry.arguments?.getString("name") ?: ""
 
             ResourceDetailScreen(

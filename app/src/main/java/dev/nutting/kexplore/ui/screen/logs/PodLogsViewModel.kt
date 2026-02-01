@@ -25,6 +25,10 @@ data class PodLogsState(
 
 class PodLogsViewModel : ViewModel() {
 
+    companion object {
+        private const val MAX_LINES = 5000
+    }
+
     private val _state = MutableStateFlow(PodLogsState())
     val state: StateFlow<PodLogsState> = _state.asStateFlow()
 
@@ -102,7 +106,7 @@ class PodLogsViewModel : ViewModel() {
         streamJob = viewModelScope.launch {
             try {
                 repository.streamPodLogs(namespace, podName, container, tailLines).collect { line ->
-                    _state.update { it.copy(lines = it.lines + line) }
+                    _state.update { it.copy(lines = (it.lines + line).takeLast(MAX_LINES)) }
                 }
                 _state.update { it.copy(isStreaming = false) }
             } catch (e: Exception) {

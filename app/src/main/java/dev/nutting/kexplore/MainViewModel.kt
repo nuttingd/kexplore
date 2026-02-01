@@ -13,12 +13,14 @@ import dev.nutting.kexplore.ui.navigation.BottomTab
 import dev.nutting.kexplore.util.ErrorMapper
 import io.fabric8.kubernetes.client.KubernetesClient
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.cancellation.CancellationException
 
 data class UiState(
     val connections: List<ClusterConnection> = emptyList(),
@@ -37,6 +39,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
+    private var connectJob: Job? = null
     private var client: KubernetesClient? = null
     private var _repository: KubernetesRepository? = null
     val repository: KubernetesRepository? get() = _repository
@@ -71,7 +74,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         connectionStore.setActiveConnectionId(connectionId)
 
-        viewModelScope.launch {
+        connectJob?.cancel()
+        connectJob = viewModelScope.launch {
             try {
                 val newClient = withContext(Dispatchers.IO) {
                     KubernetesClientFactory.createClient(connection)
@@ -100,6 +104,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         activeNamespace = activeNs,
                     )
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(

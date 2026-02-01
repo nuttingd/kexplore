@@ -7,10 +7,12 @@ import io.fabric8.kubernetes.api.model.HasMetadata
 import io.fabric8.kubernetes.client.KubernetesClient
 import io.fabric8.kubernetes.client.dsl.ExecWatch
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.cancellation.CancellationException
 import java.io.Closeable
 import java.io.OutputStream
 import java.io.PipedInputStream
@@ -59,7 +61,7 @@ class KubernetesRepository(private val client: KubernetesClient) {
 
     suspend fun getResource(namespace: String, type: ResourceType, name: String): HasMetadata =
         withContext(Dispatchers.IO) {
-            when (type) {
+            val resource: HasMetadata? = when (type) {
                 ResourceType.Pod -> client.pods().inNamespace(namespace).withName(name).get()
                 ResourceType.Deployment -> client.apps().deployments().inNamespace(namespace).withName(name).get()
                 ResourceType.ReplicaSet -> client.apps().replicaSets().inNamespace(namespace).withName(name).get()
@@ -88,6 +90,7 @@ class KubernetesRepository(private val client: KubernetesClient) {
                 ResourceType.ResourceQuota -> client.resourceQuotas().inNamespace(namespace).withName(name).get()
                 ResourceType.LimitRange -> client.limitRanges().inNamespace(namespace).withName(name).get()
             }
+            resource ?: throw NoSuchElementException("${type.name} '$name' not found")
         }
 
     suspend fun getResourceDetail(namespace: String, type: ResourceType, name: String): ResourceDetail =
@@ -107,7 +110,7 @@ class KubernetesRepository(private val client: KubernetesClient) {
         name: String,
         container: String? = null,
         tailLines: Int = 100,
-    ): Flow<String> = flow {
+    ): Flow<String> = callbackFlow {
         val logWatch = client.pods()
             .inNamespace(namespace)
             .withName(name)
@@ -115,19 +118,29 @@ class KubernetesRepository(private val client: KubernetesClient) {
             .tailingLines(tailLines)
             .watchLog()
 
-        logWatch.output.bufferedReader().use { reader ->
-            var line = reader.readLine()
-            while (line != null) {
-                emit(line)
-                line = reader.readLine()
+        try {
+            logWatch.output.bufferedReader().use { reader ->
+                var line = reader.readLine()
+                while (line != null) {
+                    send(line)
+                    line = reader.readLine()
+                }
             }
+            channel.close()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            channel.close(e)
         }
+
+        awaitClose { logWatch.close() }
     }.flowOn(Dispatchers.IO)
 
     suspend fun getContainerNames(namespace: String, podName: String): List<String> =
         withContext(Dispatchers.IO) {
             val pod = client.pods().inNamespace(namespace).withName(podName).get()
-            pod.spec.containers.map { it.name }
+                ?: throw NoSuchElementException("Pod '$podName' not found in namespace '$namespace'")
+            pod.spec?.containers?.map { it.name } ?: emptyList()
         }
 
     suspend fun execCommand(
@@ -150,6 +163,8 @@ class KubernetesRepository(private val client: KubernetesClient) {
         // Wait for the exec to complete
         try {
             execWatch.exitCode().join()
+        } catch (e: CancellationException) {
+            throw e
         } catch (_: Exception) {
             // Timeout or interruption
         } finally {
