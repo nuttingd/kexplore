@@ -62,7 +62,10 @@ fun MainScreen(
                     title = {
                         Text(
                             viewModel.getActiveConnectionName()
-                                ?.let { "$it / ${state.activeNamespace}" }
+                                ?.let {
+                                    val ns = state.activeNamespace.ifEmpty { "All Namespaces" }
+                                    "$it / $ns"
+                                }
                                 ?: "Kexplore"
                         )
                     },

@@ -84,6 +84,27 @@ fun DrawerContent(
                     .weight(1f, fill = false)
                     .fillMaxWidth(),
             ) {
+                item {
+                    ListItem(
+                        headlineContent = {
+                            Text(
+                                "All Namespaces",
+                                style = MaterialTheme.typography.bodyLarge,
+                            )
+                        },
+                        trailingContent = {
+                            if (state.activeNamespace.isEmpty()) {
+                                Icon(
+                                    Icons.Default.Check,
+                                    contentDescription = "Active",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                        },
+                        modifier = Modifier.clickable { onSelectNamespace("") },
+                    )
+                    HorizontalDivider()
+                }
                 items(state.namespaces.data) { ns ->
                     ListItem(
                         headlineContent = { Text(ns) },

@@ -24,20 +24,21 @@ class KubernetesRepository(private val client: KubernetesClient) {
 
     suspend fun getResources(namespace: String, type: ResourceType): List<ResourceSummary> =
         withContext(Dispatchers.IO) {
+            val allNamespaces = namespace.isEmpty()
             val items: List<HasMetadata> = when (type) {
-                ResourceType.Pod -> client.pods().inNamespace(namespace).list().items
-                ResourceType.Deployment -> client.apps().deployments().inNamespace(namespace).list().items
-                ResourceType.ReplicaSet -> client.apps().replicaSets().inNamespace(namespace).list().items
-                ResourceType.StatefulSet -> client.apps().statefulSets().inNamespace(namespace).list().items
-                ResourceType.DaemonSet -> client.apps().daemonSets().inNamespace(namespace).list().items
-                ResourceType.Job -> client.batch().v1().jobs().inNamespace(namespace).list().items
-                ResourceType.CronJob -> client.batch().v1().cronjobs().inNamespace(namespace).list().items
-                ResourceType.Service -> client.services().inNamespace(namespace).list().items
-                ResourceType.Ingress -> client.network().v1().ingresses().inNamespace(namespace).list().items
-                ResourceType.ConfigMap -> client.configMaps().inNamespace(namespace).list().items
-                ResourceType.Secret -> client.secrets().inNamespace(namespace).list().items
-                ResourceType.ServiceAccount -> client.serviceAccounts().inNamespace(namespace).list().items
-                ResourceType.PersistentVolumeClaim -> client.persistentVolumeClaims().inNamespace(namespace).list().items
+                ResourceType.Pod -> if (allNamespaces) client.pods().inAnyNamespace().list().items else client.pods().inNamespace(namespace).list().items
+                ResourceType.Deployment -> if (allNamespaces) client.apps().deployments().inAnyNamespace().list().items else client.apps().deployments().inNamespace(namespace).list().items
+                ResourceType.ReplicaSet -> if (allNamespaces) client.apps().replicaSets().inAnyNamespace().list().items else client.apps().replicaSets().inNamespace(namespace).list().items
+                ResourceType.StatefulSet -> if (allNamespaces) client.apps().statefulSets().inAnyNamespace().list().items else client.apps().statefulSets().inNamespace(namespace).list().items
+                ResourceType.DaemonSet -> if (allNamespaces) client.apps().daemonSets().inAnyNamespace().list().items else client.apps().daemonSets().inNamespace(namespace).list().items
+                ResourceType.Job -> if (allNamespaces) client.batch().v1().jobs().inAnyNamespace().list().items else client.batch().v1().jobs().inNamespace(namespace).list().items
+                ResourceType.CronJob -> if (allNamespaces) client.batch().v1().cronjobs().inAnyNamespace().list().items else client.batch().v1().cronjobs().inNamespace(namespace).list().items
+                ResourceType.Service -> if (allNamespaces) client.services().inAnyNamespace().list().items else client.services().inNamespace(namespace).list().items
+                ResourceType.Ingress -> if (allNamespaces) client.network().v1().ingresses().inAnyNamespace().list().items else client.network().v1().ingresses().inNamespace(namespace).list().items
+                ResourceType.ConfigMap -> if (allNamespaces) client.configMaps().inAnyNamespace().list().items else client.configMaps().inNamespace(namespace).list().items
+                ResourceType.Secret -> if (allNamespaces) client.secrets().inAnyNamespace().list().items else client.secrets().inNamespace(namespace).list().items
+                ResourceType.ServiceAccount -> if (allNamespaces) client.serviceAccounts().inAnyNamespace().list().items else client.serviceAccounts().inNamespace(namespace).list().items
+                ResourceType.PersistentVolumeClaim -> if (allNamespaces) client.persistentVolumeClaims().inAnyNamespace().list().items else client.persistentVolumeClaims().inNamespace(namespace).list().items
             }
             items.map { ResourceMappers.toSummary(it, type) }
         }
