@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="app/src/main/ic_launcher-playstore.png" width="128" alt="Kexplore icon" />
+</p>
+
 # Kexplore
 
 A Kubernetes API explorer for Android.
