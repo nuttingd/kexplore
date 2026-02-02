@@ -118,7 +118,11 @@ class PortForwardManager {
         }
         activeForwards.clear()
         _sessions.update { list ->
-            list.map { it.copy(status = ForwardStatus.Stopped) }
+            list.map {
+                if (it.status == ForwardStatus.Active || it.status == ForwardStatus.Starting) {
+                    it.copy(status = ForwardStatus.Stopped)
+                } else it
+            }
         }
     }
 
@@ -133,7 +137,7 @@ class PortForwardManager {
     }
 
     val activeCount: Int
-        get() = _sessions.value.count { it.status == ForwardStatus.Active }
+        get() = _sessions.value.count { it.status == ForwardStatus.Active || it.status == ForwardStatus.Starting }
 
     private fun ensureHealthCheck() {
         if (healthCheckJob?.isActive == true) return
