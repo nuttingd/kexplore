@@ -63,6 +63,7 @@ fun MainScreen(
     onNavigateToDetail: (namespace: String, kind: ResourceType, name: String) -> Unit,
     onNavigateToHealth: () -> Unit = {},
     onNavigateToEvents: () -> Unit = {},
+    onNavigateToCrds: () -> Unit = {},
     actionMessage: String? = null,
     onActionMessageShown: () -> Unit = {},
 ) {
@@ -103,6 +104,10 @@ fun MainScreen(
                 onManageConnections = {
                     scope.launch { drawerState.close() }
                     onManageConnections()
+                },
+                onNavigateToCrds = {
+                    scope.launch { drawerState.close() }
+                    onNavigateToCrds()
                 },
             )
         },

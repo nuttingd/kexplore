@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Cloud
@@ -32,6 +33,7 @@ fun DrawerContent(
     onSelectConnection: (String) -> Unit,
     onSelectNamespace: (String) -> Unit,
     onManageConnections: () -> Unit,
+    onNavigateToCrds: () -> Unit = {},
 ) {
     ModalDrawerSheet {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -125,11 +127,22 @@ fun DrawerContent(
         }
 
         HorizontalDivider()
+        if (state.isConnected) {
+            TextButton(
+                onClick = onNavigateToCrds,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+            ) {
+                Icon(Icons.Default.Extension, contentDescription = null)
+                Text("Custom Resources")
+            }
+        }
         TextButton(
             onClick = onManageConnections,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(horizontal = 16.dp, vertical = 4.dp),
         ) {
             Icon(Icons.Default.Settings, contentDescription = null)
             Text("Manage Connections")

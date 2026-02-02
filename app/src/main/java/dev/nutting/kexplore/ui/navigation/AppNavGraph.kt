@@ -19,6 +19,12 @@ import dev.nutting.kexplore.ui.screen.connection.ConnectionViewModel
 import dev.nutting.kexplore.ui.screen.connection.ImportKubeconfigScreen
 import dev.nutting.kexplore.ui.screen.connection.ManualConnectionScreen
 import dev.nutting.kexplore.ui.screen.connection.QrScanScreen
+import dev.nutting.kexplore.ui.screen.crd.CrdInstanceDetailScreen
+import dev.nutting.kexplore.ui.screen.crd.CrdInstanceDetailViewModel
+import dev.nutting.kexplore.ui.screen.crd.CrdInstanceListScreen
+import dev.nutting.kexplore.ui.screen.crd.CrdInstanceListViewModel
+import dev.nutting.kexplore.ui.screen.crd.CrdListScreen
+import dev.nutting.kexplore.ui.screen.crd.CrdListViewModel
 import dev.nutting.kexplore.ui.screen.detail.ResourceDetailScreen
 import dev.nutting.kexplore.ui.screen.detail.ResourceDetailViewModel
 import dev.nutting.kexplore.ui.screen.exec.PodExecScreen
@@ -42,6 +48,10 @@ object Routes {
     const val EVENTS = "events"
     const val QR_SCAN = "setup/qr"
 
+    const val CRD_LIST = "crds"
+    const val CRD_INSTANCES = "crds/{crdName}"
+    const val CRD_INSTANCE_DETAIL = "crds/{crdName}/{namespace}/{name}"
+
     const val CLUSTER_SCOPE_SENTINEL = "_cluster"
 
     fun resourceDetail(namespace: String, kind: ResourceType, name: String): String {
@@ -54,6 +64,12 @@ object Routes {
 
     fun podExec(namespace: String, pod: String, container: String): String =
         "exec/${Uri.encode(namespace)}/${Uri.encode(pod)}/${Uri.encode(container)}"
+
+    fun crdInstances(crdName: String): String =
+        "crds/${Uri.encode(crdName)}"
+
+    fun crdInstanceDetail(crdName: String, namespace: String?, name: String): String =
+        "crds/${Uri.encode(crdName)}/${Uri.encode(namespace ?: CLUSTER_SCOPE_SENTINEL)}/${Uri.encode(name)}"
 }
 
 @Composable
@@ -127,6 +143,7 @@ fun AppNavGraph(
                 },
                 onNavigateToHealth = { navController.navigate(Routes.HEALTH) },
                 onNavigateToEvents = { navController.navigate(Routes.EVENTS) },
+                onNavigateToCrds = { navController.navigate(Routes.CRD_LIST) },
                 actionMessage = actionMessage,
                 onActionMessageShown = {
                     backStackEntry.savedStateHandle.remove<String>("action_message")
@@ -262,6 +279,67 @@ fun AppNavGraph(
                 container = container.ifEmpty { null },
                 onBack = { navController.popBackStack() },
                 execViewModel = execViewModel,
+            )
+        }
+
+        composable(Routes.CRD_LIST) {
+            val crdRepository by mainViewModel.crdRepository.collectAsState()
+            val crdListViewModel: CrdListViewModel = viewModel()
+            CrdListScreen(
+                crdRepository = crdRepository,
+                onBack = { navController.popBackStack() },
+                onCrdClick = { crdName ->
+                    navController.navigate(Routes.crdInstances(crdName))
+                },
+                viewModel = crdListViewModel,
+            )
+        }
+
+        composable(
+            route = Routes.CRD_INSTANCES,
+            arguments = listOf(
+                navArgument("crdName") { type = NavType.StringType },
+            ),
+        ) { backStackEntry ->
+            val crdName = backStackEntry.arguments?.getString("crdName") ?: ""
+            val crdRepository by mainViewModel.crdRepository.collectAsState()
+            val uiState by mainViewModel.uiState.collectAsState()
+            val namespace = uiState.activeNamespace.ifEmpty { null }
+            val instanceListViewModel: CrdInstanceListViewModel = viewModel()
+            CrdInstanceListScreen(
+                crdRepository = crdRepository,
+                crdName = crdName,
+                namespace = namespace,
+                onBack = { navController.popBackStack() },
+                onInstanceClick = { ns, name ->
+                    navController.navigate(Routes.crdInstanceDetail(crdName, ns, name))
+                },
+                viewModel = instanceListViewModel,
+            )
+        }
+
+        composable(
+            route = Routes.CRD_INSTANCE_DETAIL,
+            arguments = listOf(
+                navArgument("crdName") { type = NavType.StringType },
+                navArgument("namespace") { type = NavType.StringType },
+                navArgument("name") { type = NavType.StringType },
+            ),
+        ) { backStackEntry ->
+            val crdName = backStackEntry.arguments?.getString("crdName") ?: ""
+            val namespace = backStackEntry.arguments?.getString("namespace")?.let {
+                if (it == Routes.CLUSTER_SCOPE_SENTINEL) null else it
+            }
+            val name = backStackEntry.arguments?.getString("name") ?: ""
+            val crdRepository by mainViewModel.crdRepository.collectAsState()
+            val detailViewModel: CrdInstanceDetailViewModel = viewModel()
+            CrdInstanceDetailScreen(
+                crdRepository = crdRepository,
+                crdName = crdName,
+                namespace = namespace,
+                name = name,
+                onBack = { navController.popBackStack() },
+                viewModel = detailViewModel,
             )
         }
     }

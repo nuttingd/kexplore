@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import dev.nutting.kexplore.data.connection.ClusterConnection
 import dev.nutting.kexplore.data.kubernetes.AnomalyChecker
+import dev.nutting.kexplore.data.kubernetes.CrdRepository
 import dev.nutting.kexplore.data.kubernetes.KubernetesClientFactory
 import dev.nutting.kexplore.data.kubernetes.KubernetesRepository
 import dev.nutting.kexplore.data.kubernetes.MetricsRepository
@@ -53,6 +54,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _metricsRepository = MutableStateFlow<MetricsRepository?>(null)
     val metricsRepository: StateFlow<MetricsRepository?> = _metricsRepository.asStateFlow()
 
+    private val _crdRepository = MutableStateFlow<CrdRepository?>(null)
+    val crdRepository: StateFlow<CrdRepository?> = _crdRepository.asStateFlow()
+
     init {
         loadConnections()
     }
@@ -90,6 +94,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 client = newClient
                 _repository.value = KubernetesRepository(newClient)
                 _metricsRepository.value = MetricsRepository(newClient)
+                _crdRepository.value = CrdRepository(newClient)
 
                 val namespaces = withContext(Dispatchers.IO) {
                     newClient.namespaces().list().items.map { it.metadata.name }

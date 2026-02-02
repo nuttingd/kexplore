@@ -59,6 +59,7 @@ import dev.nutting.kexplore.ui.components.LabelChipGroup
 import dev.nutting.kexplore.ui.components.MetadataCard
 import dev.nutting.kexplore.ui.components.ScaleDialog
 import dev.nutting.kexplore.ui.components.SectionHeader
+import dev.nutting.kexplore.ui.components.YamlView
 import dev.nutting.kexplore.ui.screen.logs.PodLogsScreen
 
 private enum class ConfirmAction {
@@ -331,7 +332,7 @@ fun ResourceDetailScreen(
                     resourceType = resourceType,
                     onRetry = { detailViewModel.retry(repository) },
                 )
-                "YAML" -> YamlTab(yaml = detailState.yaml)
+                "YAML" -> YamlView(yaml = detailState.yaml)
                 "Metrics" -> MetricsTab(
                     metricsRepository = metricsRepository,
                     namespace = namespace,
@@ -479,28 +480,6 @@ private fun ContainerCard(container: ContainerInfo) {
             }
             if (container.mounts.isNotEmpty()) {
                 KeyValueRow("Mounts", container.mounts.joinToString("\n"))
-            }
-        }
-    }
-}
-
-@Composable
-private fun YamlTab(yaml: ContentState<String>) {
-    ContentStateHost(state = yaml) { content ->
-        val lines = remember(content) { content.lines() }
-        androidx.compose.foundation.text.selection.SelectionContainer {
-            androidx.compose.foundation.lazy.LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(8.dp),
-            ) {
-                items(lines.size) { index ->
-                    Text(
-                        text = lines[index],
-                        fontFamily = FontFamily.Monospace,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
             }
         }
     }
