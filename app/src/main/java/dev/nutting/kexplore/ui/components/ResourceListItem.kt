@@ -7,10 +7,12 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SwapVert
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -28,6 +30,10 @@ fun ResourceListItem(
     summary: ResourceSummary,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    isSelected: Boolean = false,
+    selectionMode: Boolean = false,
+    onToggleSelection: (() -> Unit)? = null,
+    onEnterSelectionMode: (() -> Unit)? = null,
     onDelete: (() -> Unit)? = null,
     onScale: (() -> Unit)? = null,
     onRestart: (() -> Unit)? = null,
@@ -36,7 +42,14 @@ fun ResourceListItem(
     var menuExpanded by remember { mutableStateOf(false) }
     val hasActions = onDelete != null || onScale != null || onRestart != null || onTrigger != null
 
+    val containerColor = if (isSelected) {
+        MaterialTheme.colorScheme.primaryContainer
+    } else {
+        MaterialTheme.colorScheme.surface
+    }
+
     ListItem(
+        colors = ListItemDefaults.colors(containerColor = containerColor),
         headlineContent = { Text(summary.name) },
         supportingContent = {
             val parts = mutableListOf<String>()
@@ -46,15 +59,22 @@ fun ResourceListItem(
             Text(parts.joinToString(" | "))
         },
         leadingContent = {
-            Icon(
-                imageVector = summary.kind.icon,
-                contentDescription = summary.kind.displayName,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            if (selectionMode) {
+                Checkbox(
+                    checked = isSelected,
+                    onCheckedChange = null,
+                )
+            } else {
+                Icon(
+                    imageVector = summary.kind.icon,
+                    contentDescription = summary.kind.displayName,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         },
         trailingContent = {
             StatusChip(status = summary.status)
-            if (hasActions) {
+            if (hasActions && !selectionMode) {
                 DropdownMenu(
                     expanded = menuExpanded,
                     onDismissRequest = { menuExpanded = false },
@@ -98,8 +118,16 @@ fun ResourceListItem(
         },
         modifier = modifier.combinedClickable(
             role = Role.Button,
-            onClick = onClick,
-            onLongClick = if (hasActions) {
+            onClick = if (selectionMode) {
+                { onToggleSelection?.invoke(); Unit }
+            } else {
+                onClick
+            },
+            onLongClick = if (selectionMode) {
+                { onToggleSelection?.invoke() }
+            } else if (onEnterSelectionMode != null) {
+                { onEnterSelectionMode() }
+            } else if (hasActions) {
                 { menuExpanded = true }
             } else null,
         ),

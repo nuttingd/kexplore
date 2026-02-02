@@ -19,6 +19,12 @@ import dev.nutting.kexplore.ui.screen.connection.ConnectionViewModel
 import dev.nutting.kexplore.ui.screen.connection.ImportKubeconfigScreen
 import dev.nutting.kexplore.ui.screen.connection.ManualConnectionScreen
 import dev.nutting.kexplore.ui.screen.connection.QrScanScreen
+import dev.nutting.kexplore.ui.screen.crd.CrdInstanceDetailScreen
+import dev.nutting.kexplore.ui.screen.crd.CrdInstanceDetailViewModel
+import dev.nutting.kexplore.ui.screen.crd.CrdInstanceListScreen
+import dev.nutting.kexplore.ui.screen.crd.CrdInstanceListViewModel
+import dev.nutting.kexplore.ui.screen.crd.CrdListScreen
+import dev.nutting.kexplore.ui.screen.crd.CrdListViewModel
 import dev.nutting.kexplore.ui.screen.detail.ResourceDetailScreen
 import dev.nutting.kexplore.ui.screen.detail.ResourceDetailViewModel
 import dev.nutting.kexplore.ui.screen.exec.PodExecScreen
@@ -27,6 +33,9 @@ import dev.nutting.kexplore.ui.screen.events.EventStreamScreen
 import dev.nutting.kexplore.ui.screen.health.HealthDashboardScreen
 import dev.nutting.kexplore.ui.screen.logs.PodLogsScreen
 import dev.nutting.kexplore.ui.screen.main.MainScreen
+import dev.nutting.kexplore.ui.screen.portforward.PortForwardScreen
+import dev.nutting.kexplore.ui.screen.portforward.PortForwardViewModel
+import dev.nutting.kexplore.ui.screen.settings.MonitoringSettingsScreen
 
 object Routes {
     const val SETUP = "setup"
@@ -42,6 +51,13 @@ object Routes {
     const val EVENTS = "events"
     const val QR_SCAN = "setup/qr"
 
+    const val MONITORING_SETTINGS = "settings/monitoring"
+    const val PORT_FORWARD = "portforward?pod={pod}&service={service}"
+
+    const val CRD_LIST = "crds"
+    const val CRD_INSTANCES = "crds/{crdName}"
+    const val CRD_INSTANCE_DETAIL = "crds/{crdName}/{namespace}/{name}"
+
     const val CLUSTER_SCOPE_SENTINEL = "_cluster"
 
     fun resourceDetail(namespace: String, kind: ResourceType, name: String): String {
@@ -54,6 +70,20 @@ object Routes {
 
     fun podExec(namespace: String, pod: String, container: String): String =
         "exec/${Uri.encode(namespace)}/${Uri.encode(pod)}/${Uri.encode(container)}"
+
+    fun portForward(pod: String? = null, service: String? = null): String {
+        val params = buildList {
+            if (pod != null) add("pod=${Uri.encode(pod)}")
+            if (service != null) add("service=${Uri.encode(service)}")
+        }
+        return if (params.isEmpty()) "portforward" else "portforward?${params.joinToString("&")}"
+    }
+
+    fun crdInstances(crdName: String): String =
+        "crds/${Uri.encode(crdName)}"
+
+    fun crdInstanceDetail(crdName: String, namespace: String?, name: String): String =
+        "crds/${Uri.encode(crdName)}/${Uri.encode(namespace ?: CLUSTER_SCOPE_SENTINEL)}/${Uri.encode(name)}"
 }
 
 @Composable
@@ -127,6 +157,11 @@ fun AppNavGraph(
                 },
                 onNavigateToHealth = { navController.navigate(Routes.HEALTH) },
                 onNavigateToEvents = { navController.navigate(Routes.EVENTS) },
+                onNavigateToCrdInstances = { crdName ->
+                    navController.navigate(Routes.crdInstances(crdName))
+                },
+                onNavigateToMonitoring = { navController.navigate(Routes.MONITORING_SETTINGS) },
+                onNavigateToPortForward = { navController.navigate(Routes.portForward()) },
                 actionMessage = actionMessage,
                 onActionMessageShown = {
                     backStackEntry.savedStateHandle.remove<String>("action_message")
@@ -218,6 +253,13 @@ fun AppNavGraph(
                 onNavigateToRelated = { relNs, relKind, relName ->
                     navController.navigate(Routes.resourceDetail(relNs, relKind, relName))
                 },
+                onPortForward = { podOrServiceName, isPod ->
+                    if (isPod) {
+                        navController.navigate(Routes.portForward(pod = podOrServiceName))
+                    } else {
+                        navController.navigate(Routes.portForward(service = podOrServiceName))
+                    }
+                },
                 detailViewModel = detailViewModel,
             )
         }
@@ -262,6 +304,107 @@ fun AppNavGraph(
                 container = container.ifEmpty { null },
                 onBack = { navController.popBackStack() },
                 execViewModel = execViewModel,
+            )
+        }
+
+        composable(
+            route = Routes.PORT_FORWARD,
+            arguments = listOf(
+                navArgument("pod") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+                navArgument("service") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+            ),
+        ) { backStackEntry ->
+            val repository by mainViewModel.repository.collectAsState()
+            val k8sClient by mainViewModel.client.collectAsState()
+            val uiState by mainViewModel.uiState.collectAsState()
+            val portForwardViewModel: PortForwardViewModel = viewModel()
+            val preSelectedPod = backStackEntry.arguments?.getString("pod")
+            val preSelectedService = backStackEntry.arguments?.getString("service")
+
+            PortForwardScreen(
+                repository = repository,
+                client = k8sClient,
+                connectionId = uiState.activeConnectionId,
+                namespace = uiState.activeNamespace,
+                onBack = { navController.popBackStack() },
+                viewModel = portForwardViewModel,
+                preSelectedPod = preSelectedPod,
+                preSelectedService = preSelectedService,
+            )
+        }
+
+        composable(Routes.MONITORING_SETTINGS) {
+            MonitoringSettingsScreen(
+                onBack = { navController.popBackStack() },
+            )
+        }
+
+        composable(Routes.CRD_LIST) {
+            val crdRepository by mainViewModel.crdRepository.collectAsState()
+            val crdListViewModel: CrdListViewModel = viewModel()
+            CrdListScreen(
+                crdRepository = crdRepository,
+                onBack = { navController.popBackStack() },
+                onCrdClick = { crdName ->
+                    navController.navigate(Routes.crdInstances(crdName))
+                },
+                viewModel = crdListViewModel,
+            )
+        }
+
+        composable(
+            route = Routes.CRD_INSTANCES,
+            arguments = listOf(
+                navArgument("crdName") { type = NavType.StringType },
+            ),
+        ) { backStackEntry ->
+            val crdName = backStackEntry.arguments?.getString("crdName") ?: ""
+            val crdRepository by mainViewModel.crdRepository.collectAsState()
+            val uiState by mainViewModel.uiState.collectAsState()
+            val namespace = uiState.activeNamespace.ifEmpty { null }
+            val instanceListViewModel: CrdInstanceListViewModel = viewModel()
+            CrdInstanceListScreen(
+                crdRepository = crdRepository,
+                crdName = crdName,
+                namespace = namespace,
+                onBack = { navController.popBackStack() },
+                onInstanceClick = { ns, name ->
+                    navController.navigate(Routes.crdInstanceDetail(crdName, ns, name))
+                },
+                viewModel = instanceListViewModel,
+            )
+        }
+
+        composable(
+            route = Routes.CRD_INSTANCE_DETAIL,
+            arguments = listOf(
+                navArgument("crdName") { type = NavType.StringType },
+                navArgument("namespace") { type = NavType.StringType },
+                navArgument("name") { type = NavType.StringType },
+            ),
+        ) { backStackEntry ->
+            val crdName = backStackEntry.arguments?.getString("crdName") ?: ""
+            val namespace = backStackEntry.arguments?.getString("namespace")?.let {
+                if (it == Routes.CLUSTER_SCOPE_SENTINEL) null else it
+            }
+            val name = backStackEntry.arguments?.getString("name") ?: ""
+            val crdRepository by mainViewModel.crdRepository.collectAsState()
+            val detailViewModel: CrdInstanceDetailViewModel = viewModel()
+            CrdInstanceDetailScreen(
+                crdRepository = crdRepository,
+                crdName = crdName,
+                namespace = namespace,
+                name = name,
+                onBack = { navController.popBackStack() },
+                viewModel = detailViewModel,
             )
         }
     }

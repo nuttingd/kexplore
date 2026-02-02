@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.cancellation.CancellationException
 
 data class MultiplexLine(
     val container: String,
@@ -218,6 +219,8 @@ class PodLogsViewModel : ViewModel() {
                     repository.streamPodLogs(namespace, podName, container, tailLines).collect { line ->
                         multiplexBuffer.send(MultiplexLine(container, line))
                     }
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (_: Exception) {
                     // Individual container stream errors are non-fatal
                 }
@@ -293,6 +296,8 @@ class PodLogsViewModel : ViewModel() {
                     lineBuffer.send(line)
                 }
                 _state.update { it.copy(isStreaming = false) }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _state.update { it.copy(isStreaming = false, error = ErrorMapper.map(e)) }
             }

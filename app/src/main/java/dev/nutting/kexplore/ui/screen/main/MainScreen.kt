@@ -3,20 +3,26 @@ package dev.nutting.kexplore.ui.screen.main
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MonitorHeart
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.SyncAlt
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -51,6 +57,8 @@ import dev.nutting.kexplore.MainViewModel
 import dev.nutting.kexplore.R
 import dev.nutting.kexplore.data.model.ResourceType
 import dev.nutting.kexplore.ui.navigation.BottomTab
+import dev.nutting.kexplore.ui.screen.crd.CrdListContent
+import dev.nutting.kexplore.ui.screen.crd.CrdListViewModel
 import dev.nutting.kexplore.ui.screen.resources.ResourceListScreen
 import dev.nutting.kexplore.ui.screen.resources.ResourceListViewModel
 import kotlinx.coroutines.launch
@@ -63,6 +71,9 @@ fun MainScreen(
     onNavigateToDetail: (namespace: String, kind: ResourceType, name: String) -> Unit,
     onNavigateToHealth: () -> Unit = {},
     onNavigateToEvents: () -> Unit = {},
+    onNavigateToCrdInstances: (crdName: String) -> Unit = {},
+    onNavigateToMonitoring: () -> Unit = {},
+    onNavigateToPortForward: () -> Unit = {},
     actionMessage: String? = null,
     onActionMessageShown: () -> Unit = {},
 ) {
@@ -71,6 +82,7 @@ fun MainScreen(
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val resourceListViewModel: ResourceListViewModel = viewModel()
+    val crdListViewModel: CrdListViewModel = viewModel()
     val appContext = LocalContext.current.applicationContext as KexploreApp
     val resourceCache = remember { appContext.resourceCache }
     var showAboutDialog by remember { mutableStateOf(false) }
@@ -104,6 +116,10 @@ fun MainScreen(
                     scope.launch { drawerState.close() }
                     onManageConnections()
                 },
+                onNavigateToMonitoring = {
+                    scope.launch { drawerState.close() }
+                    onNavigateToMonitoring()
+                },
             )
         },
     ) {
@@ -115,11 +131,13 @@ fun MainScreen(
                         Text(
                             viewModel.getActiveConnectionName()
                                 ?.let { clusterName ->
-                                    if (state.selectedTab == BottomTab.Cluster) {
-                                        "$clusterName / Cluster Resources"
-                                    } else {
-                                        val ns = state.activeNamespace.ifEmpty { "All Namespaces" }
-                                        "$clusterName / $ns"
+                                    when (state.selectedTab) {
+                                        BottomTab.Cluster -> "$clusterName / Cluster Resources"
+                                        BottomTab.Custom -> "$clusterName / Custom Resources"
+                                        else -> {
+                                            val ns = state.activeNamespace.ifEmpty { "All Namespaces" }
+                                            "$clusterName / $ns"
+                                        }
                                     }
                                 }
                                 ?: "Kexplore"
@@ -131,6 +149,22 @@ fun MainScreen(
                         }
                     },
                     actions = {
+                        val portForwardCount = remember(appContext) {
+                            appContext.portForwardManager.sessions
+                        }
+                        val pfSessions by portForwardCount.collectAsState()
+                        val activeForwards = pfSessions.count {
+                            it.status == dev.nutting.kexplore.data.portforward.ForwardStatus.Active
+                        }
+                        IconButton(onClick = onNavigateToPortForward) {
+                            if (activeForwards > 0) {
+                                BadgedBox(badge = { Badge { Text("$activeForwards") } }) {
+                                    Icon(Icons.Default.SyncAlt, contentDescription = "Port Forward")
+                                }
+                            } else {
+                                Icon(Icons.Default.SyncAlt, contentDescription = "Port Forward")
+                            }
+                        }
                         IconButton(onClick = onNavigateToHealth) {
                             if (state.tabAnomalies.totalIssueCount > 0) {
                                 BadgedBox(badge = { Badge { Text("${state.tabAnomalies.totalIssueCount}") } }) {
@@ -175,23 +209,41 @@ fun MainScreen(
                 }
             },
         ) { padding ->
-            ResourceListScreen(
-                repository = repository,
-                namespace = state.activeNamespace,
-                category = state.selectedTab.category,
-                isConnected = state.isConnected,
-                connectionError = state.connectionError,
-                modifier = Modifier.padding(padding),
-                onResourceClick = { summary ->
-                    onNavigateToDetail(summary.namespace, summary.kind, summary.name)
-                },
-                listViewModel = resourceListViewModel,
-                cache = resourceCache,
-                connectionId = state.activeConnectionId,
-            )
+            if (state.selectedTab == BottomTab.Custom) {
+                val crdRepository by viewModel.crdRepository.collectAsState()
+                CrdListContent(
+                    crdRepository = crdRepository,
+                    onCrdClick = onNavigateToCrdInstances,
+                    viewModel = crdListViewModel,
+                    modifier = Modifier.padding(padding),
+                )
+            } else {
+                ResourceListScreen(
+                    repository = repository,
+                    namespace = state.activeNamespace,
+                    category = state.selectedTab.category!!,
+                    isConnected = state.isConnected,
+                    connectionError = state.connectionError,
+                    modifier = Modifier.padding(padding),
+                    onResourceClick = { summary ->
+                        onNavigateToDetail(summary.namespace, summary.kind, summary.name)
+                    },
+                    listViewModel = resourceListViewModel,
+                    cache = resourceCache,
+                    connectionId = state.activeConnectionId,
+                )
+            }
         }
     }
 }
+
+private data class AboutLibrary(val name: String, val description: String, val url: String)
+
+private val aboutLibraries = listOf(
+    AboutLibrary("Fabric8 Kubernetes Client", "Kubernetes API client for Java/Android", "https://github.com/fabric8io/kubernetes-client"),
+    AboutLibrary("Vico", "Compose charting library", "https://github.com/patrykandpatrick/vico"),
+    AboutLibrary("ML Kit Barcode Scanning", "QR code scanning for kubeconfig import", "https://developers.google.com/ml-kit/vision/barcode-scanning"),
+)
 
 @Composable
 private fun AboutDialog(onDismiss: () -> Unit) {
@@ -207,7 +259,7 @@ private fun AboutDialog(onDismiss: () -> Unit) {
         },
         title = { Text("Kexplore") },
         text = {
-            Column {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 Text(
                     "Version ${BuildConfig.VERSION_NAME}",
                     style = MaterialTheme.typography.bodySmall,
@@ -228,6 +280,38 @@ private fun AboutDialog(onDismiss: () -> Unit) {
                     contentPadding = PaddingValues(0.dp),
                 ) {
                     Text("View on GitHub")
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                HorizontalDivider()
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    "Libraries",
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    aboutLibraries.forEach { lib ->
+                        Column(
+                            modifier = Modifier.clickable {
+                                context.startActivity(
+                                    Intent(Intent.ACTION_VIEW, Uri.parse(lib.url))
+                                )
+                            },
+                        ) {
+                            Text(
+                                lib.name,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                            Text(
+                                lib.description,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
                 }
             }
         },

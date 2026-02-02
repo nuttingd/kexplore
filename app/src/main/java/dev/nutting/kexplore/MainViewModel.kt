@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import dev.nutting.kexplore.data.connection.ClusterConnection
 import dev.nutting.kexplore.data.kubernetes.AnomalyChecker
+import dev.nutting.kexplore.data.kubernetes.CrdRepository
 import dev.nutting.kexplore.data.kubernetes.KubernetesClientFactory
 import dev.nutting.kexplore.data.kubernetes.KubernetesRepository
 import dev.nutting.kexplore.data.kubernetes.MetricsRepository
@@ -45,13 +46,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private var connectJob: Job? = null
     private var anomalyJob: Job? = null
-    private var client: KubernetesClient? = null
+
+    private val _client = MutableStateFlow<KubernetesClient?>(null)
+    val client: StateFlow<KubernetesClient?> = _client.asStateFlow()
+    private var clientInstance: KubernetesClient?
+        get() = _client.value
+        set(value) { _client.value = value }
 
     private val _repository = MutableStateFlow<KubernetesRepository?>(null)
     val repository: StateFlow<KubernetesRepository?> = _repository.asStateFlow()
 
     private val _metricsRepository = MutableStateFlow<MetricsRepository?>(null)
     val metricsRepository: StateFlow<MetricsRepository?> = _metricsRepository.asStateFlow()
+
+    private val _crdRepository = MutableStateFlow<CrdRepository?>(null)
+    val crdRepository: StateFlow<CrdRepository?> = _crdRepository.asStateFlow()
 
     init {
         loadConnections()
@@ -70,6 +79,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun connectToCluster(connectionId: String) {
         val connection = connectionStore.getConnection(connectionId) ?: return
+
+        // Stop port forwards for old connection
+        val oldConnectionId = _uiState.value.activeConnectionId
+        if (oldConnectionId != null && oldConnectionId != connectionId) {
+            getApplication<KexploreApp>().portForwardManager.stopForConnection(oldConnectionId)
+        }
+
         _uiState.update {
             it.copy(
                 activeConnectionId = connectionId,
@@ -86,10 +102,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val newClient = withContext(Dispatchers.IO) {
                     KubernetesClientFactory.createClient(connection)
                 }
-                client?.close()
-                client = newClient
+                clientInstance?.close()
+                clientInstance = newClient
                 _repository.value = KubernetesRepository(newClient)
                 _metricsRepository.value = MetricsRepository(newClient)
+                _crdRepository.value = CrdRepository(newClient)
 
                 val namespaces = withContext(Dispatchers.IO) {
                     newClient.namespaces().list().items.map { it.metadata.name }
@@ -165,6 +182,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     override fun onCleared() {
         super.onCleared()
         anomalyJob?.cancel()
-        client?.close()
+        clientInstance?.close()
     }
 }

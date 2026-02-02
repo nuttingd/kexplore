@@ -16,6 +16,7 @@ import kotlinx.coroutines.sync.withLock
 class MetricsCollector(
     private val metricsRepository: MetricsRepository,
     private val scope: CoroutineScope,
+    private val pollIntervalMs: Long = DEFAULT_POLL_INTERVAL_MS,
 ) {
     private val _snapshots = MutableStateFlow<List<ResourceMetricsSnapshot>>(emptyList())
     val snapshots: StateFlow<List<ResourceMetricsSnapshot>> = _snapshots.asStateFlow()
@@ -26,8 +27,9 @@ class MetricsCollector(
     private val _metricsAvailable = MutableStateFlow<Boolean?>(null)
     val metricsAvailable: StateFlow<Boolean?> = _metricsAvailable.asStateFlow()
 
+    private val maxSamples = windowSlots(pollIntervalMs)
     private val bufferMutex = Mutex()
-    private val buffer = ArrayDeque<ResourceMetricsSnapshot>(MAX_SAMPLES)
+    private val buffer = ArrayDeque<ResourceMetricsSnapshot>(maxSamples)
     private var pollingJob: Job? = null
 
     fun startPodMetrics(namespace: String, podName: String) {
@@ -49,7 +51,7 @@ class MetricsCollector(
                         memoryBytes = data.totalMemory,
                     ))
                 }
-                delay(POLL_INTERVAL_MS)
+                delay(pollIntervalMs)
             }
         }
     }
@@ -74,7 +76,7 @@ class MetricsCollector(
                         memoryBytes = data.memoryBytes,
                     ))
                 }
-                delay(POLL_INTERVAL_MS)
+                delay(pollIntervalMs)
             }
         }
     }
@@ -93,7 +95,7 @@ class MetricsCollector(
 
     private suspend fun addSnapshot(snapshot: ResourceMetricsSnapshot) {
         bufferMutex.withLock {
-            if (buffer.size >= MAX_SAMPLES) {
+            if (buffer.size >= maxSamples) {
                 buffer.removeFirst()
             }
             buffer.addLast(snapshot)
@@ -102,7 +104,9 @@ class MetricsCollector(
     }
 
     companion object {
-        const val POLL_INTERVAL_MS = 5_000L
-        const val MAX_SAMPLES = 60 // 5 minutes at 5s intervals
+        const val DEFAULT_POLL_INTERVAL_MS = 2_000L
+        const val WINDOW_DURATION_MS = 60_000L
+
+        fun windowSlots(intervalMs: Long): Int = (WINDOW_DURATION_MS / intervalMs).toInt()
     }
 }

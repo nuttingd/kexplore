@@ -1,13 +1,24 @@
 package dev.nutting.kexplore.ui.screen.resources
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -24,6 +35,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.nutting.kexplore.data.cache.ResourceCache
@@ -71,8 +83,19 @@ fun ResourceListScreen(
     var confirmRestartTarget by remember { mutableStateOf<ResourceSummary?>(null) }
     var confirmTriggerTarget by remember { mutableStateOf<ResourceSummary?>(null) }
     var scaleTarget by remember { mutableStateOf<ResourceSummary?>(null) }
+    var showBulkDeleteDialog by remember { mutableStateOf(false) }
 
     val effectiveNamespace = if (selectedType.isClusterScoped) "" else namespace
+
+    // Clear selection on type/namespace/search changes
+    LaunchedEffect(selectedType, effectiveNamespace, searchQuery) {
+        listViewModel.clearSelection()
+    }
+
+    // Back handler to exit selection mode
+    BackHandler(enabled = listState.selectionMode) {
+        listViewModel.clearSelection()
+    }
 
     // Load resources on type/namespace/connection change
     LaunchedEffect(selectedType, effectiveNamespace, isConnected, repository) {
@@ -85,7 +108,10 @@ fun ResourceListScreen(
     }
 
     DisposableEffect(Unit) {
-        onDispose { listViewModel.stopAutoRefresh() }
+        onDispose {
+            listViewModel.stopAutoRefresh()
+            listViewModel.clearSelection()
+        }
     }
 
     // Delete confirmation dialog
@@ -108,7 +134,7 @@ fun ResourceListScreen(
                         }
                     }
                 }) {
-                    Text("Delete", color = androidx.compose.material3.MaterialTheme.colorScheme.error)
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
@@ -279,11 +305,98 @@ fun ResourceListScreen(
                         }
                     }
                 }
+
+                // Bulk delete confirmation dialog
+                if (showBulkDeleteDialog) {
+                    val selectedSummaries = filtered.filter { "${it.namespace}/${it.name}" in listState.selectedItems }
+                    val count = selectedSummaries.size
+                    AlertDialog(
+                        onDismissRequest = { showBulkDeleteDialog = false },
+                        title = { Text("Delete $count resources?") },
+                        text = {
+                            val names = selectedSummaries.take(5).map { it.name }
+                            val remaining = count - names.size
+                            val text = names.joinToString("\n") + if (remaining > 0) "\n+ $remaining more" else ""
+                            Text(text)
+                        },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                showBulkDeleteDialog = false
+                                listViewModel.bulkDelete(repository, selectedSummaries) { success, fail ->
+                                    scope.launch {
+                                        val msg = if (fail == 0) {
+                                            "Deleted $success resources"
+                                        } else {
+                                            "Deleted $success of ${success + fail} ($fail failed)"
+                                        }
+                                        snackbarHostState.showSnackbar(msg)
+                                        listViewModel.loadResources(repository, effectiveNamespace, selectedType, isConnected, connectionError, isRefresh = true, cache = cache, connectionId = connectionId)
+                                    }
+                                }
+                            }) {
+                                Text("Delete", color = MaterialTheme.colorScheme.error)
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showBulkDeleteDialog = false }) {
+                                Text("Cancel")
+                            }
+                        },
+                    )
+                }
+
                 if (filtered.isEmpty()) {
                     EmptyContent(message = "No ${selectedType.pluralName} found")
                 } else {
                     LazyColumn {
+                        // Selection action bar
+                        if (listState.selectionMode) {
+                            item(key = "__selection_bar__") {
+                                if (listState.bulkDeleteInProgress) {
+                                    LinearProgressIndicator(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp),
+                                    )
+                                } else {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Text(
+                                            text = "${listState.selectedItems.size} selected",
+                                            style = MaterialTheme.typography.titleSmall,
+                                        )
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                        ) {
+                                            TextButton(onClick = { listViewModel.selectAll(filtered) }) {
+                                                Text("Select All")
+                                            }
+                                            Button(
+                                                onClick = { showBulkDeleteDialog = true },
+                                                colors = ButtonDefaults.buttonColors(
+                                                    containerColor = MaterialTheme.colorScheme.error,
+                                                ),
+                                            ) {
+                                                Text("Delete")
+                                            }
+                                            IconButton(onClick = { listViewModel.clearSelection() }) {
+                                                Icon(Icons.Default.Close, contentDescription = "Cancel selection")
+                                            }
+                                        }
+                                    }
+                                    HorizontalDivider()
+                                }
+                            }
+                        }
+
                         items(filtered, key = { "${it.namespace}/${it.name}" }) { summary ->
+                            val itemKey = "${summary.namespace}/${summary.name}"
                             val canDelete = summary.kind == ResourceType.Pod
                             val canScale = summary.kind.canScale
                             val canRestart = summary.kind.canRestart
@@ -293,6 +406,10 @@ fun ResourceListScreen(
                                 ResourceListItem(
                                     summary = summary,
                                     onClick = { onResourceClick(summary) },
+                                    isSelected = itemKey in listState.selectedItems,
+                                    selectionMode = listState.selectionMode,
+                                    onToggleSelection = { listViewModel.toggleSelection(itemKey) },
+                                    onEnterSelectionMode = { listViewModel.enterSelectionMode(itemKey) },
                                     onDelete = if (canDelete || canScale || canRestart || canTrigger) {
                                         { confirmDeleteTarget = summary }
                                     } else null,
@@ -308,7 +425,7 @@ fun ResourceListScreen(
                                 )
                             }
 
-                            if (canDelete) {
+                            if (canDelete && !listState.selectionMode) {
                                 SwipeToDeleteContainer(
                                     onDelete = { confirmDeleteTarget = summary },
                                 ) {
