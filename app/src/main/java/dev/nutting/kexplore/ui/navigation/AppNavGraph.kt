@@ -52,7 +52,7 @@ object Routes {
     const val QR_SCAN = "setup/qr"
 
     const val MONITORING_SETTINGS = "settings/monitoring"
-    const val PORT_FORWARD = "portforward"
+    const val PORT_FORWARD = "portforward?pod={pod}&service={service}"
 
     const val CRD_LIST = "crds"
     const val CRD_INSTANCES = "crds/{crdName}"
@@ -70,6 +70,14 @@ object Routes {
 
     fun podExec(namespace: String, pod: String, container: String): String =
         "exec/${Uri.encode(namespace)}/${Uri.encode(pod)}/${Uri.encode(container)}"
+
+    fun portForward(pod: String? = null, service: String? = null): String {
+        val params = buildList {
+            if (pod != null) add("pod=${Uri.encode(pod)}")
+            if (service != null) add("service=${Uri.encode(service)}")
+        }
+        return if (params.isEmpty()) "portforward" else "portforward?${params.joinToString("&")}"
+    }
 
     fun crdInstances(crdName: String): String =
         "crds/${Uri.encode(crdName)}"
@@ -153,7 +161,7 @@ fun AppNavGraph(
                     navController.navigate(Routes.crdInstances(crdName))
                 },
                 onNavigateToMonitoring = { navController.navigate(Routes.MONITORING_SETTINGS) },
-                onNavigateToPortForward = { navController.navigate(Routes.PORT_FORWARD) },
+                onNavigateToPortForward = { navController.navigate(Routes.portForward()) },
                 actionMessage = actionMessage,
                 onActionMessageShown = {
                     backStackEntry.savedStateHandle.remove<String>("action_message")
@@ -246,11 +254,11 @@ fun AppNavGraph(
                     navController.navigate(Routes.resourceDetail(relNs, relKind, relName))
                 },
                 onPortForward = { podOrServiceName, isPod ->
-                    navController.currentBackStackEntry?.savedStateHandle?.let { handle ->
-                        if (isPod) handle.set("preSelectedPod", podOrServiceName)
-                        else handle.set("preSelectedService", podOrServiceName)
+                    if (isPod) {
+                        navController.navigate(Routes.portForward(pod = podOrServiceName))
+                    } else {
+                        navController.navigate(Routes.portForward(service = podOrServiceName))
                     }
-                    navController.navigate(Routes.PORT_FORWARD)
                 },
                 detailViewModel = detailViewModel,
             )
@@ -299,13 +307,27 @@ fun AppNavGraph(
             )
         }
 
-        composable(Routes.PORT_FORWARD) { backStackEntry ->
+        composable(
+            route = Routes.PORT_FORWARD,
+            arguments = listOf(
+                navArgument("pod") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+                navArgument("service") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+            ),
+        ) { backStackEntry ->
             val repository by mainViewModel.repository.collectAsState()
             val k8sClient by mainViewModel.client.collectAsState()
             val uiState by mainViewModel.uiState.collectAsState()
             val portForwardViewModel: PortForwardViewModel = viewModel()
-            val preSelectedPod = backStackEntry.savedStateHandle.get<String>("preSelectedPod")
-            val preSelectedService = backStackEntry.savedStateHandle.get<String>("preSelectedService")
+            val preSelectedPod = backStackEntry.arguments?.getString("pod")
+            val preSelectedService = backStackEntry.arguments?.getString("service")
 
             PortForwardScreen(
                 repository = repository,
