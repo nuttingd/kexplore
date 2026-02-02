@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlin.coroutines.cancellation.CancellationException
 
 data class EventItem(
     val uid: String,
@@ -84,6 +85,8 @@ class EventStreamViewModel : ViewModel() {
                     eventBuffer.send(item)
                 }
                 _state.update { it.copy(isStreaming = false) }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _state.update { it.copy(isStreaming = false, error = ErrorMapper.map(e)) }
             }

@@ -183,7 +183,7 @@ class DependencyResolver(private val repository: KubernetesRepository) {
                 .filterIsInstance<io.fabric8.kubernetes.api.model.Service>()
                 .filter { svc ->
                     val selector = svc.spec?.selector ?: return@filter false
-                    labels.all { (k, v) -> selector[k] == v }
+                    selector.all { (k, v) -> labels[k] == v }
                 }
                 .map { svc -> resolveService(namespace, svc.metadata.name) }
         } catch (_: Exception) { emptyList() }

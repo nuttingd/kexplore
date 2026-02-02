@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -29,11 +30,12 @@ fun DependencyTab(
     onRetry: () -> Unit = {},
 ) {
     ContentStateHost(state = dependencies, onRetry = onRetry) { root ->
-        val flatNodes = mutableListOf<Pair<Int, DependencyNode>>()
-        flattenTree(root, 0, flatNodes)
+        val flatNodes = remember(root) {
+            mutableListOf<Pair<Int, DependencyNode>>().also { flattenTree(root, 0, it) }
+        }
 
         LazyColumn(modifier = Modifier.fillMaxSize()) {
-            items(flatNodes) { (depth, node) ->
+            items(flatNodes, key = { (_, node) -> "${node.kind}/${node.namespace}/${node.name}" }) { (depth, node) ->
                 DependencyNodeRow(
                     node = node,
                     depth = depth,

@@ -12,6 +12,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import dev.nutting.kexplore.util.ErrorMapper
+import kotlin.coroutines.cancellation.CancellationException
 
 private val ANSI_ESCAPE_REGEX = Regex("\u001b\\[[0-9;]*[a-zA-Z]")
 private const val MAX_LINES = 5000
@@ -89,8 +91,10 @@ class PodExecViewModel : ViewModel() {
                         _state.update { it.copy(lines = (it.lines + newLines).takeLast(MAX_LINES)) }
                     }
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                _state.update { it.copy(error = "Failed to start shell: ${e.message}") }
+                _state.update { it.copy(error = "Failed to start shell: ${ErrorMapper.map(e)}") }
             }
         }
     }
@@ -104,8 +108,10 @@ class PodExecViewModel : ViewModel() {
             try {
                 s.stdin.write("$command\n".toByteArray())
                 s.stdin.flush()
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                _state.update { it.copy(error = "Write error: ${e.message}") }
+                _state.update { it.copy(error = "Write error: ${ErrorMapper.map(e)}") }
             }
         }
     }

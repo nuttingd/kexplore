@@ -4,7 +4,7 @@ import android.content.Context
 import androidx.glance.appwidget.updateAll
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import dev.nutting.kexplore.data.connection.ConnectionStore
+import dev.nutting.kexplore.KexploreApp
 import dev.nutting.kexplore.data.kubernetes.KubernetesClientFactory
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -15,7 +15,7 @@ class WidgetRefreshWorker(
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
-        val connectionStore = ConnectionStore(context)
+        val connectionStore = (context.applicationContext as KexploreApp).connectionStore
         val activeId = connectionStore.getActiveConnectionId() ?: return Result.success()
         val connection = connectionStore.getConnection(activeId) ?: return Result.success()
 

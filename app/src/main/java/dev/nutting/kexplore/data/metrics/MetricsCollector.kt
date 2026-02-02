@@ -32,8 +32,7 @@ class MetricsCollector(
 
     fun startPodMetrics(namespace: String, podName: String) {
         stop()
-        buffer.clear()
-        _snapshots.value = emptyList()
+        clearBuffer()
         _metricsAvailable.value = null
 
         pollingJob = scope.launch {
@@ -57,8 +56,7 @@ class MetricsCollector(
 
     fun startNodeMetrics(nodeName: String) {
         stop()
-        buffer.clear()
-        _snapshots.value = emptyList()
+        clearBuffer()
         _metricsAvailable.value = null
 
         pollingJob = scope.launch {
@@ -84,6 +82,13 @@ class MetricsCollector(
     fun stop() {
         pollingJob?.cancel()
         pollingJob = null
+    }
+
+    private fun clearBuffer() {
+        // Use runBlocking-free clear since stop() already cancelled the polling job
+        buffer.clear()
+        _snapshots.value = emptyList()
+        _metricsAvailable.value = null
     }
 
     private suspend fun addSnapshot(snapshot: ResourceMetricsSnapshot) {
