@@ -28,18 +28,34 @@ data class PortForwardUiState(
     val error: String? = null,
 )
 
+data class NamedPort(
+    val port: Int,
+    val name: String? = null,
+    val protocol: String = "TCP",
+) {
+    val displayLabel: String
+        get() = buildString {
+            append(port)
+            if (!name.isNullOrEmpty()) append(" ($name)")
+        }
+}
+
 data class PodInfo(
     val name: String,
     val namespace: String,
-    val ports: List<Int>,
-)
+    val namedPorts: List<NamedPort>,
+) {
+    val ports: List<Int> get() = namedPorts.map { it.port }
+}
 
 data class ServiceInfo(
     val name: String,
     val namespace: String,
-    val ports: List<Int>,
+    val namedPorts: List<NamedPort>,
     val selector: Map<String, String>,
-)
+) {
+    val ports: List<Int> get() = namedPorts.map { it.port }
+}
 
 class PortForwardViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -58,23 +74,35 @@ class PortForwardViewModel(application: Application) : AndroidViewModel(applicat
             try {
                 val podSummaries = repository.getResourcesRaw(namespace, ResourceType.Pod)
                 val pods = podSummaries.filterIsInstance<io.fabric8.kubernetes.api.model.Pod>().map { pod ->
-                    val ports = pod.spec?.containers?.flatMap { container ->
-                        container.ports?.map { it.containerPort } ?: emptyList()
+                    val namedPorts = pod.spec?.containers?.flatMap { container ->
+                        container.ports?.map { cp ->
+                            NamedPort(
+                                port = cp.containerPort,
+                                name = cp.name,
+                                protocol = cp.protocol ?: "TCP",
+                            )
+                        } ?: emptyList()
                     } ?: emptyList()
                     PodInfo(
                         name = pod.metadata.name,
                         namespace = pod.metadata.namespace,
-                        ports = ports,
+                        namedPorts = namedPorts,
                     )
                 }
 
                 val serviceSummaries = repository.getResourcesRaw(namespace, ResourceType.Service)
                 val services = serviceSummaries.filterIsInstance<io.fabric8.kubernetes.api.model.Service>().map { svc ->
-                    val ports = svc.spec?.ports?.map { it.port } ?: emptyList()
+                    val namedPorts = svc.spec?.ports?.map { sp ->
+                        NamedPort(
+                            port = sp.port,
+                            name = sp.name,
+                            protocol = sp.protocol ?: "TCP",
+                        )
+                    } ?: emptyList()
                     ServiceInfo(
                         name = svc.metadata.name,
                         namespace = svc.metadata.namespace,
-                        ports = ports,
+                        namedPorts = namedPorts,
                         selector = svc.spec?.selector ?: emptyMap(),
                     )
                 }

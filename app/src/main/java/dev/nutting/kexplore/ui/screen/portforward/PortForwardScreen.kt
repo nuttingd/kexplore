@@ -95,19 +95,55 @@ fun PortForwardScreen(
         viewModel.loadResources(repository, namespace)
     }
 
-    // Auto-select ports from pre-selected pod/service
-    LaunchedEffect(uiState.pods, preSelectedPod) {
-        if (preSelectedPod != null && selectedPod == preSelectedPod && remotePortText.isEmpty()) {
-            val pod = uiState.pods.find { it.name == preSelectedPod }
-            pod?.ports?.firstOrNull()?.let { remotePortText = it.toString() }
+    // Auto-select when there's only one pod or service
+    LaunchedEffect(uiState.pods) {
+        if (selectedPod.isEmpty() && uiState.pods.size == 1) {
+            val pod = uiState.pods.first()
+            selectedPod = pod.name
+            pod.namedPorts.firstOrNull()?.let {
+                remotePortText = it.port.toString()
+                if (localPortText.isEmpty()) localPortText = it.port.toString()
+            }
+        }
+    }
+    LaunchedEffect(uiState.services) {
+        if (selectedService.isEmpty() && uiState.services.size == 1 && targetTypeIndex == 1) {
+            val svc = uiState.services.first()
+            selectedService = svc.name
+            svc.namedPorts.firstOrNull()?.let {
+                remotePortText = it.port.toString()
+                if (localPortText.isEmpty()) localPortText = it.port.toString()
+            }
         }
     }
 
-    val currentPorts = remember(uiState.pods, uiState.services, selectedPod, selectedService, targetTypeIndex) {
+    // Auto-fill ports from pre-selected pod
+    LaunchedEffect(uiState.pods, preSelectedPod) {
+        if (preSelectedPod != null && selectedPod == preSelectedPod && remotePortText.isEmpty()) {
+            val pod = uiState.pods.find { it.name == preSelectedPod }
+            pod?.namedPorts?.firstOrNull()?.let {
+                remotePortText = it.port.toString()
+                if (localPortText.isEmpty()) localPortText = it.port.toString()
+            }
+        }
+    }
+
+    // Auto-fill ports from pre-selected service
+    LaunchedEffect(uiState.services, preSelectedService) {
+        if (preSelectedService != null && selectedService == preSelectedService && remotePortText.isEmpty()) {
+            val svc = uiState.services.find { it.name == preSelectedService }
+            svc?.namedPorts?.firstOrNull()?.let {
+                remotePortText = it.port.toString()
+                if (localPortText.isEmpty()) localPortText = it.port.toString()
+            }
+        }
+    }
+
+    val currentNamedPorts = remember(uiState.pods, uiState.services, selectedPod, selectedService, targetTypeIndex) {
         if (targetTypeIndex == 0) {
-            uiState.pods.find { it.name == selectedPod }?.ports ?: emptyList()
+            uiState.pods.find { it.name == selectedPod }?.namedPorts ?: emptyList()
         } else {
-            uiState.services.find { it.name == selectedService }?.ports ?: emptyList()
+            uiState.services.find { it.name == selectedService }?.namedPorts ?: emptyList()
         }
     }
 
@@ -170,11 +206,25 @@ fun PortForwardScreen(
                         ) {
                             uiState.pods.forEach { pod ->
                                 DropdownMenuItem(
-                                    text = { Text(pod.name) },
+                                    text = {
+                                        Column {
+                                            Text(pod.name)
+                                            if (pod.namedPorts.isNotEmpty()) {
+                                                Text(
+                                                    text = pod.namedPorts.joinToString(", ") { it.displayLabel },
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                )
+                                            }
+                                        }
+                                    },
                                     onClick = {
                                         selectedPod = pod.name
                                         podExpanded = false
-                                        pod.ports.firstOrNull()?.let { remotePortText = it.toString() }
+                                        pod.namedPorts.firstOrNull()?.let {
+                                            remotePortText = it.port.toString()
+                                            if (localPortText.isEmpty()) localPortText = it.port.toString()
+                                        }
                                     },
                                 )
                             }
@@ -202,11 +252,25 @@ fun PortForwardScreen(
                         ) {
                             uiState.services.forEach { svc ->
                                 DropdownMenuItem(
-                                    text = { Text(svc.name) },
+                                    text = {
+                                        Column {
+                                            Text(svc.name)
+                                            if (svc.namedPorts.isNotEmpty()) {
+                                                Text(
+                                                    text = svc.namedPorts.joinToString(", ") { it.displayLabel },
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                )
+                                            }
+                                        }
+                                    },
                                     onClick = {
                                         selectedService = svc.name
                                         serviceExpanded = false
-                                        svc.ports.firstOrNull()?.let { remotePortText = it.toString() }
+                                        svc.namedPorts.firstOrNull()?.let {
+                                            remotePortText = it.port.toString()
+                                            if (localPortText.isEmpty()) localPortText = it.port.toString()
+                                        }
                                     },
                                 )
                             }
@@ -226,26 +290,30 @@ fun PortForwardScreen(
                         onValueChange = { remotePortText = it },
                         label = { Text("Remote Port") },
                         trailingIcon = {
-                            if (currentPorts.isNotEmpty()) {
+                            if (currentNamedPorts.isNotEmpty()) {
                                 ExposedDropdownMenuDefaults.TrailingIcon(expanded = portExpanded)
                             }
                         },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .menuAnchor(MenuAnchorType.PrimaryNotEditable),
-                        readOnly = currentPorts.isNotEmpty(),
+                            .menuAnchor(
+                                if (currentNamedPorts.isNotEmpty()) MenuAnchorType.PrimaryNotEditable
+                                else MenuAnchorType.PrimaryEditable,
+                            ),
+                        readOnly = currentNamedPorts.isNotEmpty(),
                     )
-                    if (currentPorts.isNotEmpty()) {
+                    if (currentNamedPorts.isNotEmpty()) {
                         ExposedDropdownMenu(
                             expanded = portExpanded,
                             onDismissRequest = { portExpanded = false },
                         ) {
-                            currentPorts.forEach { port ->
+                            currentNamedPorts.forEach { namedPort ->
                                 DropdownMenuItem(
-                                    text = { Text(port.toString()) },
+                                    text = { Text(namedPort.displayLabel) },
                                     onClick = {
-                                        remotePortText = port.toString()
+                                        remotePortText = namedPort.port.toString()
+                                        localPortText = namedPort.port.toString()
                                         portExpanded = false
                                     },
                                 )
@@ -259,7 +327,10 @@ fun PortForwardScreen(
                 OutlinedTextField(
                     value = localPortText,
                     onValueChange = { localPortText = it },
-                    label = { Text("Local Port (auto if empty)") },
+                    label = { Text("Local Port (auto-assigned if empty)") },
+                    placeholder = {
+                        if (remotePortText.isNotEmpty()) Text(remotePortText)
+                    },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth(),
                 )
