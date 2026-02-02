@@ -4,8 +4,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -15,6 +20,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import dev.nutting.kexplore.data.kubernetes.KubernetesRepository
@@ -26,7 +32,11 @@ import dev.nutting.kexplore.ui.components.ContentStateHost
 import dev.nutting.kexplore.ui.components.EmptyContent
 import dev.nutting.kexplore.ui.components.ResourceListItem
 import dev.nutting.kexplore.ui.components.ResourceTypeChipRow
+import dev.nutting.kexplore.ui.components.ScaleDialog
 import dev.nutting.kexplore.ui.components.SearchFilterBar
+import dev.nutting.kexplore.ui.components.SwipeToDeleteContainer
+import dev.nutting.kexplore.util.ErrorMapper
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -46,6 +56,14 @@ fun ResourceListScreen(
     var statusFilters by remember { mutableStateOf(emptySet<ResourceStatus>()) }
     var labelFilter by remember { mutableStateOf("") }
     val listState by listViewModel.state.collectAsState()
+    val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // Confirmation dialog state
+    var confirmDeleteTarget by remember { mutableStateOf<ResourceSummary?>(null) }
+    var confirmRestartTarget by remember { mutableStateOf<ResourceSummary?>(null) }
+    var confirmTriggerTarget by remember { mutableStateOf<ResourceSummary?>(null) }
+    var scaleTarget by remember { mutableStateOf<ResourceSummary?>(null) }
 
     val effectiveNamespace = if (selectedType.isClusterScoped) "" else namespace
 
@@ -61,6 +79,123 @@ fun ResourceListScreen(
 
     DisposableEffect(Unit) {
         onDispose { listViewModel.stopAutoRefresh() }
+    }
+
+    // Delete confirmation dialog
+    confirmDeleteTarget?.let { target ->
+        AlertDialog(
+            onDismissRequest = { confirmDeleteTarget = null },
+            title = { Text("Delete ${target.kind.displayName}") },
+            text = { Text("Delete ${target.kind.displayName} '${target.name}'?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    val t = target
+                    confirmDeleteTarget = null
+                    scope.launch {
+                        try {
+                            repository?.deleteResource(t.namespace, t.kind, t.name)
+                            snackbarHostState.showSnackbar("${t.kind.displayName} '${t.name}' deleted")
+                            listViewModel.loadResources(repository, effectiveNamespace, selectedType, isConnected, connectionError, isRefresh = true)
+                        } catch (e: Exception) {
+                            snackbarHostState.showSnackbar(ErrorMapper.map(e))
+                        }
+                    }
+                }) {
+                    Text("Delete", color = androidx.compose.material3.MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDeleteTarget = null }) {
+                    Text("Cancel")
+                }
+            },
+        )
+    }
+
+    // Restart confirmation dialog
+    confirmRestartTarget?.let { target ->
+        AlertDialog(
+            onDismissRequest = { confirmRestartTarget = null },
+            title = { Text("Restart ${target.kind.displayName}") },
+            text = { Text("Restart ${target.kind.displayName} '${target.name}'?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    val t = target
+                    confirmRestartTarget = null
+                    scope.launch {
+                        try {
+                            repository?.restartResource(t.namespace, t.kind, t.name)
+                            snackbarHostState.showSnackbar("${t.kind.displayName} '${t.name}' restarting")
+                            listViewModel.loadResources(repository, effectiveNamespace, selectedType, isConnected, connectionError, isRefresh = true)
+                        } catch (e: Exception) {
+                            snackbarHostState.showSnackbar(ErrorMapper.map(e))
+                        }
+                    }
+                }) {
+                    Text("Confirm")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmRestartTarget = null }) {
+                    Text("Cancel")
+                }
+            },
+        )
+    }
+
+    // Trigger confirmation dialog
+    confirmTriggerTarget?.let { target ->
+        AlertDialog(
+            onDismissRequest = { confirmTriggerTarget = null },
+            title = { Text("Trigger Job") },
+            text = { Text("Create a Job from CronJob '${target.name}'?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    val t = target
+                    confirmTriggerTarget = null
+                    scope.launch {
+                        try {
+                            val jobName = repository?.triggerCronJob(t.namespace, t.name)
+                            snackbarHostState.showSnackbar("Job '$jobName' created")
+                        } catch (e: Exception) {
+                            snackbarHostState.showSnackbar(ErrorMapper.map(e))
+                        }
+                    }
+                }) {
+                    Text("Confirm")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmTriggerTarget = null }) {
+                    Text("Cancel")
+                }
+            },
+        )
+    }
+
+    // Scale dialog
+    scaleTarget?.let { target ->
+        ScaleDialog(
+            currentReplicas = run {
+                val ready = target.readyCount ?: "1/1"
+                val parts = ready.split("/")
+                parts.lastOrNull()?.trim()?.toIntOrNull() ?: 1
+            },
+            onDismiss = { scaleTarget = null },
+            onConfirm = { replicas ->
+                val t = target
+                scaleTarget = null
+                scope.launch {
+                    try {
+                        repository?.scaleResource(t.namespace, t.kind, t.name, replicas)
+                        snackbarHostState.showSnackbar("Scaled '${t.name}' to $replicas replicas")
+                        listViewModel.loadResources(repository, effectiveNamespace, selectedType, isConnected, connectionError, isRefresh = true)
+                    } catch (e: Exception) {
+                        snackbarHostState.showSnackbar(ErrorMapper.map(e))
+                    }
+                }
+            },
+        )
     }
 
     Column(modifier = modifier.fillMaxSize()) {
@@ -84,6 +219,8 @@ fun ResourceListScreen(
             labelFilter = labelFilter,
             onLabelFilterChange = { labelFilter = it },
         )
+
+        SnackbarHost(snackbarHostState)
 
         PullToRefreshBox(
             isRefreshing = listState.isRefreshing,
@@ -129,10 +266,39 @@ fun ResourceListScreen(
                 } else {
                     LazyColumn {
                         items(filtered, key = { "${it.namespace}/${it.name}" }) { summary ->
-                            ResourceListItem(
-                                summary = summary,
-                                onClick = { onResourceClick(summary) },
-                            )
+                            val canDelete = summary.kind == ResourceType.Pod
+                            val canScale = summary.kind.canScale
+                            val canRestart = summary.kind.canRestart
+                            val canTrigger = summary.kind.canTrigger
+
+                            val itemContent = @Composable {
+                                ResourceListItem(
+                                    summary = summary,
+                                    onClick = { onResourceClick(summary) },
+                                    onDelete = if (canDelete || canScale || canRestart || canTrigger) {
+                                        { confirmDeleteTarget = summary }
+                                    } else null,
+                                    onScale = if (canScale) {
+                                        { scaleTarget = summary }
+                                    } else null,
+                                    onRestart = if (canRestart) {
+                                        { confirmRestartTarget = summary }
+                                    } else null,
+                                    onTrigger = if (canTrigger) {
+                                        { confirmTriggerTarget = summary }
+                                    } else null,
+                                )
+                            }
+
+                            if (canDelete) {
+                                SwipeToDeleteContainer(
+                                    onDelete = { confirmDeleteTarget = summary },
+                                ) {
+                                    itemContent()
+                                }
+                            } else {
+                                itemContent()
+                            }
                             HorizontalDivider()
                         }
                     }

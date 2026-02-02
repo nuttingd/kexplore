@@ -1,21 +1,41 @@
 package dev.nutting.kexplore.ui.components
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.SwapVert
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import dev.nutting.kexplore.data.model.ResourceSummary
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ResourceListItem(
     summary: ResourceSummary,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    onDelete: (() -> Unit)? = null,
+    onScale: (() -> Unit)? = null,
+    onRestart: (() -> Unit)? = null,
+    onTrigger: (() -> Unit)? = null,
 ) {
+    var menuExpanded by remember { mutableStateOf(false) }
+    val hasActions = onDelete != null || onScale != null || onRestart != null || onTrigger != null
+
     ListItem(
         headlineContent = { Text(summary.name) },
         supportingContent = {
@@ -34,7 +54,54 @@ fun ResourceListItem(
         },
         trailingContent = {
             StatusChip(status = summary.status)
+            if (hasActions) {
+                DropdownMenu(
+                    expanded = menuExpanded,
+                    onDismissRequest = { menuExpanded = false },
+                ) {
+                    if (onScale != null) {
+                        DropdownMenuItem(
+                            text = { Text("Scale") },
+                            onClick = { menuExpanded = false; onScale() },
+                            leadingIcon = { Icon(Icons.Default.SwapVert, contentDescription = null) },
+                        )
+                    }
+                    if (onRestart != null) {
+                        DropdownMenuItem(
+                            text = { Text("Restart") },
+                            onClick = { menuExpanded = false; onRestart() },
+                            leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
+                        )
+                    }
+                    if (onTrigger != null) {
+                        DropdownMenuItem(
+                            text = { Text("Trigger Job") },
+                            onClick = { menuExpanded = false; onTrigger() },
+                            leadingIcon = { Icon(Icons.Default.PlayArrow, contentDescription = null) },
+                        )
+                    }
+                    if (onDelete != null) {
+                        DropdownMenuItem(
+                            text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
+                            onClick = { menuExpanded = false; onDelete() },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default.Delete,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.error,
+                                )
+                            },
+                        )
+                    }
+                }
+            }
         },
-        modifier = modifier.clickable(role = Role.Button, onClick = onClick),
+        modifier = modifier.combinedClickable(
+            role = Role.Button,
+            onClick = onClick,
+            onLongClick = if (hasActions) {
+                { menuExpanded = true }
+            } else null,
+        ),
     )
 }
