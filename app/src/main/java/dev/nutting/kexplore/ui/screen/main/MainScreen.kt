@@ -3,12 +3,16 @@ package dev.nutting.kexplore.ui.screen.main
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MonitorHeart
@@ -18,6 +22,7 @@ import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -232,6 +237,14 @@ fun MainScreen(
     }
 }
 
+private data class AboutLibrary(val name: String, val description: String, val url: String)
+
+private val aboutLibraries = listOf(
+    AboutLibrary("Fabric8 Kubernetes Client", "Kubernetes API client for Java/Android", "https://github.com/fabric8io/kubernetes-client"),
+    AboutLibrary("Vico", "Compose charting library", "https://github.com/patrykandpatrick/vico"),
+    AboutLibrary("ML Kit Barcode Scanning", "QR code scanning for kubeconfig import", "https://developers.google.com/ml-kit/vision/barcode-scanning"),
+)
+
 @Composable
 private fun AboutDialog(onDismiss: () -> Unit) {
     val context = LocalContext.current
@@ -246,7 +259,7 @@ private fun AboutDialog(onDismiss: () -> Unit) {
         },
         title = { Text("Kexplore") },
         text = {
-            Column {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 Text(
                     "Version ${BuildConfig.VERSION_NAME}",
                     style = MaterialTheme.typography.bodySmall,
@@ -267,6 +280,38 @@ private fun AboutDialog(onDismiss: () -> Unit) {
                     contentPadding = PaddingValues(0.dp),
                 ) {
                     Text("View on GitHub")
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                HorizontalDivider()
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    "Libraries",
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    aboutLibraries.forEach { lib ->
+                        Column(
+                            modifier = Modifier.clickable {
+                                context.startActivity(
+                                    Intent(Intent.ACTION_VIEW, Uri.parse(lib.url))
+                                )
+                            },
+                        ) {
+                            Text(
+                                lib.name,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                            Text(
+                                lib.description,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
                 }
             }
         },
