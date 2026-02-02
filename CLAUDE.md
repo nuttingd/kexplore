@@ -15,7 +15,7 @@ Kexplore is an Android app for exploring Kubernetes cluster resources. Built wit
 ./gradlew lintDebug              # lint checks
 ```
 
-Requires JDK 17 and Android SDK 35. Min SDK is 28.
+Requires Android SDK 35. Min SDK is 28. The Gradle toolchain auto-provisions JDK 21; any JDK 17+ on `JAVA_HOME` is sufficient to launch Gradle.
 
 ## Architecture
 
