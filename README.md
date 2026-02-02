@@ -4,16 +4,26 @@
 
 # Kexplore
 
-A Kubernetes API explorer for Android.
+A Kubernetes cluster explorer for Android. Browse resources, stream logs, exec into pods, forward ports, and monitor cluster health — all from your phone.
 
-## Requirements
+## Features
 
-- JDK 17
-- Android SDK 35
+- **Resource browsing** — Workloads, Networking, Config, Storage, Cluster-scoped resources, and Custom Resources (CRDs), with search, status filtering, and label filtering
+- **Resource actions** — Delete, scale, restart, cordon/uncordon nodes, trigger CronJobs
+- **Pod logs** — Real-time streaming with search/regex highlighting and multi-container multiplexing
+- **Pod exec** — Interactive terminal sessions with command history
+- **Port forwarding** — Forward Services and Pods with session management and open-in-browser
+- **Cluster health dashboard** — Failed pods, unhealthy deployments, not-ready nodes, warning events
+- **Real-time event stream** — Watch cluster events with type and search filtering
+- **Metrics charts** — CPU and memory graphs for pods and nodes with configurable poll interval
+- **Notifications** — Background monitoring with push alerts for cluster anomalies
+- **Home screen widget** — Pod and node status at a glance
+- **Connection management** — Manual entry, kubeconfig file import, or QR code scanning
+- **Offline cache** — Browse previously loaded resources without a connection
 
-Min SDK is 28 (Android 9).
+## Building
 
-## Build
+Requires JDK 17+ and Android SDK 35. Min SDK is 28 (Android 9).
 
 ```sh
 ./gradlew assembleDebug
@@ -25,8 +35,12 @@ For a signed release build, copy `keystore.properties.example` to `keystore.prop
 ./gradlew assembleRelease
 ```
 
-## Test
+## Testing
 
 ```sh
-./gradlew test                        # unit tests
+./gradlew test
 ```
+
+## License
+
+[MIT](LICENSE)
