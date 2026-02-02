@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.VerticalAlignBottom
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -45,6 +46,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import dev.nutting.kexplore.data.kubernetes.KubernetesRepository
 import dev.nutting.kexplore.ui.components.HighlightedTerminalView
+import dev.nutting.kexplore.ui.components.MultiplexTerminalView
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -179,6 +181,40 @@ fun PodLogsScreen(
                         Icon(Icons.Default.Search, contentDescription = null)
                     },
                 )
+
+                // All Containers toggle (only for multi-container pods)
+                if (state.containers.size > 1) {
+                    FilterChip(
+                        selected = state.multiplexMode,
+                        onClick = {
+                            if (repository != null) {
+                                viewModel.toggleMultiplex(repository, namespace, podName)
+                            }
+                        },
+                        label = { Text("All") },
+                        leadingIcon = {
+                            Icon(Icons.Default.SelectAll, contentDescription = null)
+                        },
+                    )
+                }
+            }
+
+            // Container filter chips in multiplex mode
+            if (state.multiplexMode && state.containers.size > 1) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    state.containers.forEach { container ->
+                        FilterChip(
+                            selected = container in state.enabledContainers,
+                            onClick = { viewModel.toggleContainerFilter(container) },
+                            label = { Text(container) },
+                        )
+                    }
+                }
             }
 
             // Search bar
@@ -226,18 +262,30 @@ fun PodLogsScreen(
                 )
             }
 
-            // Log output with highlighting
-            HighlightedTerminalView(
-                lines = state.lines,
-                autoScroll = state.isFollowing,
-                showLineNumbers = true,
-                searchQuery = state.searchQuery,
-                isRegex = state.isRegex,
-                searchMatchIndices = state.searchMatchIndices,
-                currentMatchIndex = state.currentMatchIndex,
-                scrollToLine = scrollToLine,
-                modifier = Modifier.weight(1f),
-            )
+            // Log output
+            if (state.multiplexMode) {
+                val filteredLines = remember(state.multiplexLines, state.enabledContainers) {
+                    state.multiplexLines.filter { it.container in state.enabledContainers }
+                }
+                MultiplexTerminalView(
+                    lines = filteredLines,
+                    containers = state.containers,
+                    autoScroll = state.isFollowing,
+                    modifier = Modifier.weight(1f),
+                )
+            } else {
+                HighlightedTerminalView(
+                    lines = state.lines,
+                    autoScroll = state.isFollowing,
+                    showLineNumbers = true,
+                    searchQuery = state.searchQuery,
+                    isRegex = state.isRegex,
+                    searchMatchIndices = state.searchMatchIndices,
+                    currentMatchIndex = state.currentMatchIndex,
+                    scrollToLine = scrollToLine,
+                    modifier = Modifier.weight(1f),
+                )
+            }
         }
     }
 

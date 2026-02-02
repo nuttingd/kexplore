@@ -16,6 +16,12 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+data class MultiplexLine(
+    val container: String,
+    val text: String,
+    val receivedAt: Long = System.currentTimeMillis(),
+)
+
 data class PodLogsState(
     val containers: List<String> = emptyList(),
     val selectedContainer: String? = null,
@@ -30,6 +36,10 @@ data class PodLogsState(
     val searchMatchIndices: List<Int> = emptyList(),
     val currentMatchIndex: Int = -1,
     val searchVisible: Boolean = false,
+    // Multiplex state
+    val multiplexMode: Boolean = false,
+    val enabledContainers: Set<String> = emptySet(),
+    val multiplexLines: List<MultiplexLine> = emptyList(),
 )
 
 class PodLogsViewModel : ViewModel() {
@@ -164,6 +174,83 @@ class PodLogsViewModel : ViewModel() {
         }
     }
 
+    // Multiplex methods
+    private var multiplexJobs = mutableListOf<Job>()
+    private var multiplexBatchJob: Job? = null
+    private val multiplexBuffer = Channel<MultiplexLine>(Channel.UNLIMITED)
+
+    fun toggleMultiplex(repository: KubernetesRepository, namespace: String, podName: String) {
+        val newMode = !_state.value.multiplexMode
+        _state.update {
+            it.copy(
+                multiplexMode = newMode,
+                enabledContainers = if (newMode) it.containers.toSet() else emptySet(),
+                multiplexLines = emptyList(),
+            )
+        }
+        if (newMode) {
+            startMultiplexStreaming(repository, namespace, podName)
+        } else {
+            stopMultiplex()
+            startStreaming(repository, namespace, podName)
+        }
+    }
+
+    fun toggleContainerFilter(container: String) {
+        _state.update { state ->
+            val enabled = state.enabledContainers.toMutableSet()
+            if (container in enabled) enabled.remove(container) else enabled.add(container)
+            state.copy(enabledContainers = enabled)
+        }
+    }
+
+    private fun startMultiplexStreaming(repository: KubernetesRepository, namespace: String, podName: String) {
+        stopStreaming()
+        stopMultiplex()
+        _state.update { it.copy(isStreaming = true, error = null) }
+        startMultiplexBatchConsumer()
+
+        val containers = _state.value.containers
+        val tailLines = _state.value.tailLines
+        for (container in containers) {
+            val job = viewModelScope.launch {
+                try {
+                    repository.streamPodLogs(namespace, podName, container, tailLines).collect { line ->
+                        multiplexBuffer.send(MultiplexLine(container, line))
+                    }
+                } catch (_: Exception) {
+                    // Individual container stream errors are non-fatal
+                }
+            }
+            multiplexJobs.add(job)
+        }
+    }
+
+    private fun startMultiplexBatchConsumer() {
+        multiplexBatchJob?.cancel()
+        multiplexBatchJob = viewModelScope.launch {
+            while (isActive) {
+                delay(BATCH_INTERVAL_MS)
+                val batch = mutableListOf<MultiplexLine>()
+                while (true) {
+                    val item = multiplexBuffer.tryReceive().getOrNull() ?: break
+                    batch.add(item)
+                }
+                if (batch.isNotEmpty()) {
+                    _state.update {
+                        it.copy(multiplexLines = (it.multiplexLines + batch).takeLast(MAX_LINES))
+                    }
+                }
+            }
+        }
+    }
+
+    private fun stopMultiplex() {
+        multiplexJobs.forEach { it.cancel() }
+        multiplexJobs.clear()
+        multiplexBatchJob?.cancel()
+    }
+
     private fun computeMatchIndices(lines: List<String>, query: String, isRegex: Boolean): List<Int> {
         if (query.isBlank()) return emptyList()
         val pattern = try {
@@ -240,5 +327,6 @@ class PodLogsViewModel : ViewModel() {
         super.onCleared()
         streamJob?.cancel()
         batchJob?.cancel()
+        stopMultiplex()
     }
 }
