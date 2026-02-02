@@ -358,6 +358,10 @@ fun PortForwardScreen(
                         } else {
                             val svc = uiState.services.find { it.name == selectedService }
                             if (svc != null) {
+                                // Resolve service port → container targetPort for pod forwarding
+                                val containerPort = svc.namedPorts
+                                    .find { it.port == remotePort }?.forwardPort
+                                    ?: remotePort
                                 viewModel.resolveServiceToPod(repository, svc) { podName ->
                                     if (podName != null) {
                                         viewModel.startForward(
@@ -365,7 +369,7 @@ fun PortForwardScreen(
                                             connectionId = connId,
                                             namespace = svc.namespace,
                                             podName = podName,
-                                            remotePort = remotePort,
+                                            remotePort = containerPort,
                                             localPort = localPort,
                                             targetType = TargetType.Service,
                                             serviceName = svc.name,

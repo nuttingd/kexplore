@@ -32,10 +32,15 @@ data class NamedPort(
     val port: Int,
     val name: String? = null,
     val protocol: String = "TCP",
+    val targetPort: Int? = null,
 ) {
+    /** The port to use for fabric8 portForward() — targetPort for services, port for pods. */
+    val forwardPort: Int get() = targetPort ?: port
+
     val displayLabel: String
         get() = buildString {
             append(port)
+            if (targetPort != null && targetPort != port) append(" -> $targetPort")
             if (!name.isNullOrEmpty()) append(" ($name)")
         }
 }
@@ -93,10 +98,12 @@ class PortForwardViewModel(application: Application) : AndroidViewModel(applicat
                 val serviceSummaries = repository.getResourcesRaw(namespace, ResourceType.Service)
                 val services = serviceSummaries.filterIsInstance<io.fabric8.kubernetes.api.model.Service>().map { svc ->
                     val namedPorts = svc.spec?.ports?.map { sp ->
+                        val target = sp.targetPort?.intVal ?: sp.port
                         NamedPort(
                             port = sp.port,
                             name = sp.name,
                             protocol = sp.protocol ?: "TCP",
+                            targetPort = target,
                         )
                     } ?: emptyList()
                     ServiceInfo(
