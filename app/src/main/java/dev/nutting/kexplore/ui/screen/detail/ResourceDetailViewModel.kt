@@ -2,8 +2,10 @@ package dev.nutting.kexplore.ui.screen.detail
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dev.nutting.kexplore.data.kubernetes.DependencyResolver
 import dev.nutting.kexplore.data.kubernetes.KubernetesRepository
 import dev.nutting.kexplore.data.kubernetes.ResourceMappers
+import dev.nutting.kexplore.data.model.DependencyNode
 import dev.nutting.kexplore.data.model.ContentState
 import dev.nutting.kexplore.data.model.ResourceDetail
 import dev.nutting.kexplore.data.model.ResourceType
@@ -24,6 +26,7 @@ sealed interface ActionResult {
 data class ResourceDetailState(
     val detail: ContentState<ResourceDetail> = ContentState.Loading,
     val yaml: ContentState<String> = ContentState.Loading,
+    val dependencies: ContentState<DependencyNode>? = null,
     val actionInProgress: Boolean = false,
     val actionResult: ActionResult? = null,
 )
@@ -82,6 +85,26 @@ class ResourceDetailViewModel : ViewModel() {
                         yaml = ContentState.Error(msg),
                     )
                 }
+            }
+        }
+    }
+
+    fun loadDependencies(repository: KubernetesRepository?) {
+        val ns = currentNamespace ?: return
+        val type = currentType ?: return
+        val name = currentName ?: return
+        if (repository == null) return
+
+        _state.update { it.copy(dependencies = ContentState.Loading) }
+        viewModelScope.launch {
+            try {
+                val resolver = DependencyResolver(repository)
+                val tree = resolver.resolveDependencies(ns, type, name)
+                _state.update { it.copy(dependencies = ContentState.Success(tree)) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(dependencies = ContentState.Error(ErrorMapper.map(e))) }
             }
         }
     }

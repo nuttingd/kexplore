@@ -199,6 +199,9 @@ fun AppNavGraph(
                         ?.set("action_message", message)
                     navController.popBackStack()
                 },
+                onNavigateToRelated = { relNs, relKind, relName ->
+                    navController.navigate(Routes.resourceDetail(relNs, relKind, relName))
+                },
                 detailViewModel = detailViewModel,
             )
         }

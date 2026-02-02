@@ -77,6 +77,7 @@ fun ResourceDetailScreen(
     onExec: (container: String) -> Unit = {},
     onViewFullScreenLogs: () -> Unit = {},
     onDeleted: (message: String) -> Unit = {},
+    onNavigateToRelated: (namespace: String, kind: ResourceType, name: String) -> Unit = { _, _, _ -> },
     detailViewModel: ResourceDetailViewModel,
 ) {
     val detailState by detailViewModel.state.collectAsState()
@@ -87,11 +88,18 @@ fun ResourceDetailScreen(
     val snackbarHostState = remember { SnackbarHostState() }
 
     val hasMetrics = resourceType == ResourceType.Pod || resourceType == ResourceType.Node
+    val hasDependencies = resourceType in setOf(
+        ResourceType.Deployment, ResourceType.StatefulSet, ResourceType.DaemonSet,
+        ResourceType.ReplicaSet, ResourceType.Service,
+    )
     val tabs = buildList {
         add("Overview")
         add("YAML")
         if (hasMetrics) {
             add("Metrics")
+        }
+        if (hasDependencies) {
+            add("Dependencies")
         }
         if (resourceType == ResourceType.Pod) {
             add("Logs")
@@ -330,6 +338,18 @@ fun ResourceDetailScreen(
                     resourceName = resourceName,
                     resourceType = resourceType,
                 )
+                "Dependencies" -> {
+                    LaunchedEffect(Unit) {
+                        if (detailState.dependencies == null) {
+                            detailViewModel.loadDependencies(repository)
+                        }
+                    }
+                    DependencyTab(
+                        dependencies = detailState.dependencies ?: ContentState.Loading,
+                        onNavigateToRelated = onNavigateToRelated,
+                        onRetry = { detailViewModel.loadDependencies(repository) },
+                    )
+                }
                 "Logs" -> PodLogsScreen(
                     repository = repository,
                     namespace = namespace,
