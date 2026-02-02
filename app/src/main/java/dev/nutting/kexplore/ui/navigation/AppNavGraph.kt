@@ -22,6 +22,7 @@ import dev.nutting.kexplore.ui.screen.detail.ResourceDetailScreen
 import dev.nutting.kexplore.ui.screen.detail.ResourceDetailViewModel
 import dev.nutting.kexplore.ui.screen.exec.PodExecScreen
 import dev.nutting.kexplore.ui.screen.exec.PodExecViewModel
+import dev.nutting.kexplore.ui.screen.events.EventStreamScreen
 import dev.nutting.kexplore.ui.screen.health.HealthDashboardScreen
 import dev.nutting.kexplore.ui.screen.logs.PodLogsScreen
 import dev.nutting.kexplore.ui.screen.main.MainScreen
@@ -37,6 +38,7 @@ object Routes {
     const val POD_EXEC = "exec/{namespace}/{pod}/{container}"
 
     const val HEALTH = "health"
+    const val EVENTS = "events"
 
     const val CLUSTER_SCOPE_SENTINEL = "_cluster"
 
@@ -108,10 +110,21 @@ fun AppNavGraph(
                     navController.navigate(Routes.resourceDetail(namespace, kind, name))
                 },
                 onNavigateToHealth = { navController.navigate(Routes.HEALTH) },
+                onNavigateToEvents = { navController.navigate(Routes.EVENTS) },
                 actionMessage = actionMessage,
                 onActionMessageShown = {
                     backStackEntry.savedStateHandle.remove<String>("action_message")
                 },
+            )
+        }
+
+        composable(Routes.EVENTS) {
+            val repository by mainViewModel.repository.collectAsState()
+            val uiState by mainViewModel.uiState.collectAsState()
+            EventStreamScreen(
+                repository = repository,
+                namespace = uiState.activeNamespace,
+                onBack = { navController.popBackStack() },
             )
         }
 

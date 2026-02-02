@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MonitorHeart
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DrawerValue
@@ -60,6 +61,7 @@ fun MainScreen(
     onManageConnections: () -> Unit,
     onNavigateToDetail: (namespace: String, kind: ResourceType, name: String) -> Unit,
     onNavigateToHealth: () -> Unit = {},
+    onNavigateToEvents: () -> Unit = {},
     actionMessage: String? = null,
     onActionMessageShown: () -> Unit = {},
 ) {
@@ -134,6 +136,9 @@ fun MainScreen(
                             } else {
                                 Icon(Icons.Default.MonitorHeart, contentDescription = "Cluster Health")
                             }
+                        }
+                        IconButton(onClick = onNavigateToEvents) {
+                            Icon(Icons.Default.Notifications, contentDescription = "Events")
                         }
                         IconButton(onClick = { showAboutDialog = true }) {
                             Icon(Icons.Outlined.Info, contentDescription = "About")

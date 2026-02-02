@@ -6,6 +6,8 @@ import dev.nutting.kexplore.data.model.ResourceType
 import io.fabric8.kubernetes.api.model.HasMetadata
 import io.fabric8.kubernetes.api.model.KubernetesResourceList
 import io.fabric8.kubernetes.client.KubernetesClient
+import io.fabric8.kubernetes.client.Watcher
+import io.fabric8.kubernetes.client.WatcherException
 import io.fabric8.kubernetes.client.dsl.ExecWatch
 import io.fabric8.kubernetes.client.dsl.MixedOperation
 import io.fabric8.kubernetes.client.dsl.Resource
@@ -207,6 +209,63 @@ open class KubernetesRepository(private val client: KubernetesClient) {
             client.nodes().resource(node).update()
         }
 
+    open suspend fun getResourcesRaw(namespace: String, type: ResourceType): List<HasMetadata> =
+        withContext(Dispatchers.IO) {
+            when (type) {
+                ResourceType.Pod -> client.pods().listScoped(namespace)
+                ResourceType.Deployment -> client.apps().deployments().listScoped(namespace)
+                ResourceType.ReplicaSet -> client.apps().replicaSets().listScoped(namespace)
+                ResourceType.StatefulSet -> client.apps().statefulSets().listScoped(namespace)
+                ResourceType.DaemonSet -> client.apps().daemonSets().listScoped(namespace)
+                ResourceType.Job -> client.batch().v1().jobs().listScoped(namespace)
+                ResourceType.CronJob -> client.batch().v1().cronjobs().listScoped(namespace)
+                ResourceType.Event -> client.v1().events().listScoped(namespace)
+                ResourceType.HorizontalPodAutoscaler -> client.autoscaling().v2().horizontalPodAutoscalers().listScoped(namespace)
+                ResourceType.Service -> client.services().listScoped(namespace)
+                ResourceType.Ingress -> client.network().v1().ingresses().listScoped(namespace)
+                ResourceType.NetworkPolicy -> client.network().v1().networkPolicies().listScoped(namespace)
+                ResourceType.Endpoints -> client.endpoints().listScoped(namespace)
+                ResourceType.ConfigMap -> client.configMaps().listScoped(namespace)
+                ResourceType.Secret -> client.secrets().listScoped(namespace)
+                ResourceType.ServiceAccount -> client.serviceAccounts().listScoped(namespace)
+                ResourceType.Role -> client.rbac().roles().listScoped(namespace)
+                ResourceType.RoleBinding -> client.rbac().roleBindings().listScoped(namespace)
+                ResourceType.PersistentVolumeClaim -> client.persistentVolumeClaims().listScoped(namespace)
+                ResourceType.PersistentVolume -> client.persistentVolumes().list().items
+                ResourceType.StorageClass -> client.storage().v1().storageClasses().list().items
+                ResourceType.Node -> client.nodes().list().items
+                ResourceType.Namespace -> client.namespaces().list().items
+                ResourceType.ClusterRole -> client.rbac().clusterRoles().list().items
+                ResourceType.ClusterRoleBinding -> client.rbac().clusterRoleBindings().list().items
+                ResourceType.ResourceQuota -> client.resourceQuotas().listScoped(namespace)
+                ResourceType.LimitRange -> client.limitRanges().listScoped(namespace)
+            }
+        }
+
+    fun watchEvents(namespace: String?): Flow<EventUpdate> = callbackFlow {
+        val eventOp = if (namespace.isNullOrEmpty()) {
+            client.v1().events().inAnyNamespace()
+        } else {
+            client.v1().events().inNamespace(namespace)
+        }
+
+        val watch = eventOp.watch(object : Watcher<io.fabric8.kubernetes.api.model.Event> {
+            override fun eventReceived(action: Watcher.Action, resource: io.fabric8.kubernetes.api.model.Event) {
+                trySend(EventUpdate(action, resource))
+            }
+
+            override fun onClose(cause: WatcherException?) {
+                if (cause != null) {
+                    channel.close(cause)
+                } else {
+                    channel.close()
+                }
+            }
+        })
+
+        awaitClose { watch.close() }
+    }.flowOn(Dispatchers.IO)
+
     fun streamPodLogs(
         namespace: String,
         name: String,
@@ -312,6 +371,11 @@ open class KubernetesRepository(private val client: KubernetesClient) {
         )
     }
 }
+
+data class EventUpdate(
+    val action: Watcher.Action,
+    val event: io.fabric8.kubernetes.api.model.Event,
+)
 
 class ExecSession(
     val stdin: OutputStream,
