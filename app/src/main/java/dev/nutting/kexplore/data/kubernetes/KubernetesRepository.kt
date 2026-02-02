@@ -13,8 +13,10 @@ import io.fabric8.kubernetes.client.dsl.MixedOperation
 import io.fabric8.kubernetes.client.dsl.Resource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.cancellation.CancellationException
@@ -271,30 +273,51 @@ open class KubernetesRepository(private val client: KubernetesClient) {
         name: String,
         container: String? = null,
         tailLines: Int = 100,
-    ): Flow<String> = callbackFlow {
-        val logWatch = client.pods()
+        pollIntervalMs: Long = 2_000L,
+    ): Flow<String> = flow {
+        val podOp = client.pods()
             .inNamespace(namespace)
             .withName(name)
             .let { op -> if (container != null) op.inContainer(container) else op }
-            .tailingLines(tailLines)
-            .watchLog()
 
-        try {
-            logWatch.output.bufferedReader().use { reader ->
-                var line = reader.readLine()
-                while (line != null) {
-                    send(line)
-                    line = reader.readLine()
-                }
+        // Initial fetch: get the last N lines with timestamps for dedup
+        val initialLog = podOp.usingTimestamps()
+            .tailingLines(tailLines)
+            .getLog() ?: ""
+
+        var lastTimestamp: String? = null
+        val initialLines = initialLog.lines().filter { it.isNotEmpty() }
+        for (raw in initialLines) {
+            val spaceIdx = raw.indexOf(' ')
+            if (spaceIdx > 0) {
+                lastTimestamp = raw.substring(0, spaceIdx)
+                emit(raw.substring(spaceIdx + 1))
+            } else {
+                emit(raw)
             }
-            channel.close()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            channel.close(e)
         }
 
-        awaitClose { logWatch.close() }
+        // Poll for new lines using sinceTime to avoid duplicates
+        while (true) {
+            delay(pollIntervalMs)
+            val newLog = if (lastTimestamp != null) {
+                podOp.usingTimestamps().sinceTime(lastTimestamp).getLog() ?: ""
+            } else {
+                podOp.usingTimestamps().sinceSeconds(3).getLog() ?: ""
+            }
+            val newLines = newLog.lines().filter { it.isNotEmpty() }
+            for (raw in newLines) {
+                val spaceIdx = raw.indexOf(' ')
+                if (spaceIdx > 0) {
+                    val ts = raw.substring(0, spaceIdx)
+                    if (ts == lastTimestamp) continue
+                    lastTimestamp = ts
+                    emit(raw.substring(spaceIdx + 1))
+                } else {
+                    emit(raw)
+                }
+            }
+        }
     }.flowOn(Dispatchers.IO)
 
     suspend fun getContainerNames(namespace: String, podName: String): List<String> =
