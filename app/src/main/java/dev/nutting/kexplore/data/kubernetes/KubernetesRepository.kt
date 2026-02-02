@@ -115,6 +115,98 @@ class KubernetesRepository(private val client: KubernetesClient) {
             dev.nutting.kexplore.util.YamlSerializer.toYaml(resource)
         }
 
+    suspend fun deleteResource(namespace: String, type: ResourceType, name: String): Unit =
+        withContext(Dispatchers.IO) {
+            when (type) {
+                ResourceType.Pod -> client.pods().inNamespace(namespace).withName(name).delete()
+                ResourceType.Deployment -> client.apps().deployments().inNamespace(namespace).withName(name).delete()
+                ResourceType.ReplicaSet -> client.apps().replicaSets().inNamespace(namespace).withName(name).delete()
+                ResourceType.StatefulSet -> client.apps().statefulSets().inNamespace(namespace).withName(name).delete()
+                ResourceType.DaemonSet -> client.apps().daemonSets().inNamespace(namespace).withName(name).delete()
+                ResourceType.Job -> client.batch().v1().jobs().inNamespace(namespace).withName(name).delete()
+                ResourceType.CronJob -> client.batch().v1().cronjobs().inNamespace(namespace).withName(name).delete()
+                ResourceType.Event -> client.v1().events().inNamespace(namespace).withName(name).delete()
+                ResourceType.HorizontalPodAutoscaler -> client.autoscaling().v2().horizontalPodAutoscalers().inNamespace(namespace).withName(name).delete()
+                ResourceType.Service -> client.services().inNamespace(namespace).withName(name).delete()
+                ResourceType.Ingress -> client.network().v1().ingresses().inNamespace(namespace).withName(name).delete()
+                ResourceType.NetworkPolicy -> client.network().v1().networkPolicies().inNamespace(namespace).withName(name).delete()
+                ResourceType.Endpoints -> client.endpoints().inNamespace(namespace).withName(name).delete()
+                ResourceType.ConfigMap -> client.configMaps().inNamespace(namespace).withName(name).delete()
+                ResourceType.Secret -> client.secrets().inNamespace(namespace).withName(name).delete()
+                ResourceType.ServiceAccount -> client.serviceAccounts().inNamespace(namespace).withName(name).delete()
+                ResourceType.Role -> client.rbac().roles().inNamespace(namespace).withName(name).delete()
+                ResourceType.RoleBinding -> client.rbac().roleBindings().inNamespace(namespace).withName(name).delete()
+                ResourceType.PersistentVolumeClaim -> client.persistentVolumeClaims().inNamespace(namespace).withName(name).delete()
+                ResourceType.PersistentVolume -> client.persistentVolumes().withName(name).delete()
+                ResourceType.StorageClass -> client.storage().v1().storageClasses().withName(name).delete()
+                ResourceType.Node -> client.nodes().withName(name).delete()
+                ResourceType.Namespace -> client.namespaces().withName(name).delete()
+                ResourceType.ClusterRole -> client.rbac().clusterRoles().withName(name).delete()
+                ResourceType.ClusterRoleBinding -> client.rbac().clusterRoleBindings().withName(name).delete()
+                ResourceType.ResourceQuota -> client.resourceQuotas().inNamespace(namespace).withName(name).delete()
+                ResourceType.LimitRange -> client.limitRanges().inNamespace(namespace).withName(name).delete()
+            }
+        }
+
+    suspend fun scaleResource(namespace: String, type: ResourceType, name: String, replicas: Int): Unit =
+        withContext(Dispatchers.IO) {
+            when (type) {
+                ResourceType.Deployment -> client.apps().deployments().inNamespace(namespace).withName(name).scale(replicas)
+                ResourceType.StatefulSet -> client.apps().statefulSets().inNamespace(namespace).withName(name).scale(replicas)
+                ResourceType.ReplicaSet -> client.apps().replicaSets().inNamespace(namespace).withName(name).scale(replicas)
+                else -> throw IllegalArgumentException("${type.displayName} does not support scaling")
+            }
+        }
+
+    suspend fun restartResource(namespace: String, type: ResourceType, name: String): Unit =
+        withContext(Dispatchers.IO) {
+            when (type) {
+                ResourceType.Deployment -> client.apps().deployments().inNamespace(namespace).withName(name).rolling().restart()
+                ResourceType.StatefulSet -> client.apps().statefulSets().inNamespace(namespace).withName(name).rolling().restart()
+                ResourceType.DaemonSet -> {
+                    val ds = client.apps().daemonSets().inNamespace(namespace).withName(name).get()
+                        ?: throw NoSuchElementException("DaemonSet '$name' not found")
+                    val annotations = ds.spec?.template?.metadata?.annotations?.toMutableMap() ?: mutableMapOf()
+                    annotations["kubectl.kubernetes.io/restartedAt"] = java.time.Instant.now().toString()
+                    ds.spec.template.metadata.annotations = annotations
+                    client.apps().daemonSets().inNamespace(namespace).resource(ds).update()
+                }
+                else -> throw IllegalArgumentException("${type.displayName} does not support restart")
+            }
+        }
+
+    suspend fun triggerCronJob(namespace: String, name: String): String =
+        withContext(Dispatchers.IO) {
+            val cronJob = client.batch().v1().cronjobs().inNamespace(namespace).withName(name).get()
+                ?: throw NoSuchElementException("CronJob '$name' not found")
+            val jobName = "$name-manual-${System.currentTimeMillis() / 1000}"
+            val job = io.fabric8.kubernetes.api.model.batch.v1.JobBuilder()
+                .withNewMetadata()
+                    .withName(jobName)
+                    .withNamespace(namespace)
+                .endMetadata()
+                .withSpec(cronJob.spec.jobTemplate.spec)
+                .build()
+            client.batch().v1().jobs().inNamespace(namespace).resource(job).create()
+            jobName
+        }
+
+    suspend fun cordonNode(name: String): Unit =
+        withContext(Dispatchers.IO) {
+            val node = client.nodes().withName(name).get()
+                ?: throw NoSuchElementException("Node '$name' not found")
+            node.spec.unschedulable = true
+            client.nodes().resource(node).update()
+        }
+
+    suspend fun uncordonNode(name: String): Unit =
+        withContext(Dispatchers.IO) {
+            val node = client.nodes().withName(name).get()
+                ?: throw NoSuchElementException("Node '$name' not found")
+            node.spec.unschedulable = false
+            client.nodes().resource(node).update()
+        }
+
     fun streamPodLogs(
         namespace: String,
         name: String,

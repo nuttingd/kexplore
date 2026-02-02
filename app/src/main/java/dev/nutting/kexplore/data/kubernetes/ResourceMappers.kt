@@ -271,6 +271,7 @@ object ResourceMappers {
             }
         }
         is Node -> buildMap {
+            put("Unschedulable", (resource.spec?.unschedulable == true).toString())
             val info = resource.status?.nodeInfo
             put("OS", "${info?.operatingSystem ?: ""} ${info?.osImage ?: ""}")
             put("Kernel", info?.kernelVersion ?: "")

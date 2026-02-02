@@ -95,12 +95,18 @@ fun AppNavGraph(
             )
         }
 
-        composable(Routes.MAIN) {
+        composable(Routes.MAIN) { backStackEntry ->
+            val actionMessage = backStackEntry.savedStateHandle
+                .get<String>("action_message")
             MainScreen(
                 viewModel = mainViewModel,
                 onManageConnections = { navController.navigate(Routes.CONNECTIONS) },
                 onNavigateToDetail = { namespace, kind, name ->
                     navController.navigate(Routes.resourceDetail(namespace, kind, name))
+                },
+                actionMessage = actionMessage,
+                onActionMessageShown = {
+                    backStackEntry.savedStateHandle.remove<String>("action_message")
                 },
             )
         }
@@ -156,6 +162,12 @@ fun AppNavGraph(
                 },
                 onExec = { container ->
                     navController.navigate(Routes.podExec(namespace, name, container))
+                },
+                onDeleted = { message ->
+                    navController.previousBackStackEntry
+                        ?.savedStateHandle
+                        ?.set("action_message", message)
+                    navController.popBackStack()
                 },
                 detailViewModel = detailViewModel,
             )

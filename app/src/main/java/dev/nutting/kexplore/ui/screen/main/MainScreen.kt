@@ -22,6 +22,8 @@ import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -33,6 +35,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -53,6 +56,8 @@ fun MainScreen(
     viewModel: MainViewModel,
     onManageConnections: () -> Unit,
     onNavigateToDetail: (namespace: String, kind: ResourceType, name: String) -> Unit,
+    actionMessage: String? = null,
+    onActionMessageShown: () -> Unit = {},
 ) {
     val state by viewModel.uiState.collectAsState()
     val repository by viewModel.repository.collectAsState()
@@ -60,6 +65,14 @@ fun MainScreen(
     val scope = rememberCoroutineScope()
     val resourceListViewModel: ResourceListViewModel = viewModel()
     var showAboutDialog by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(actionMessage) {
+        if (actionMessage != null) {
+            snackbarHostState.showSnackbar(actionMessage)
+            onActionMessageShown()
+        }
+    }
 
     if (showAboutDialog) {
         AboutDialog(onDismiss = { showAboutDialog = false })
@@ -86,6 +99,7 @@ fun MainScreen(
         },
     ) {
         Scaffold(
+            snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
                 TopAppBar(
                     title = {
