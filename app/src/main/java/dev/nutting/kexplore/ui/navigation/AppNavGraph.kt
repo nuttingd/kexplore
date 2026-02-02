@@ -18,6 +18,7 @@ import dev.nutting.kexplore.ui.screen.connection.ConnectionSetupScreen
 import dev.nutting.kexplore.ui.screen.connection.ConnectionViewModel
 import dev.nutting.kexplore.ui.screen.connection.ImportKubeconfigScreen
 import dev.nutting.kexplore.ui.screen.connection.ManualConnectionScreen
+import dev.nutting.kexplore.ui.screen.connection.QrScanScreen
 import dev.nutting.kexplore.ui.screen.detail.ResourceDetailScreen
 import dev.nutting.kexplore.ui.screen.detail.ResourceDetailViewModel
 import dev.nutting.kexplore.ui.screen.exec.PodExecScreen
@@ -39,6 +40,7 @@ object Routes {
 
     const val HEALTH = "health"
     const val EVENTS = "events"
+    const val QR_SCAN = "setup/qr"
 
     const val CLUSTER_SCOPE_SENTINEL = "_cluster"
 
@@ -70,6 +72,20 @@ fun AppNavGraph(
                 onManualEntry = {
                     connectionViewModel.resetManualState()
                     navController.navigate(Routes.SETUP_MANUAL)
+                },
+                onScanQrCode = { navController.navigate(Routes.QR_SCAN) },
+            )
+        }
+
+        composable(Routes.QR_SCAN) {
+            QrScanScreen(
+                connectionViewModel = connectionViewModel,
+                onBack = { navController.popBackStack() },
+                onImported = {
+                    mainViewModel.loadConnections()
+                    navController.navigate(Routes.MAIN) {
+                        popUpTo(Routes.SETUP) { inclusive = true }
+                    }
                 },
             )
         }
