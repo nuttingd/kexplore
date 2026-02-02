@@ -22,6 +22,7 @@ import dev.nutting.kexplore.ui.screen.detail.ResourceDetailScreen
 import dev.nutting.kexplore.ui.screen.detail.ResourceDetailViewModel
 import dev.nutting.kexplore.ui.screen.exec.PodExecScreen
 import dev.nutting.kexplore.ui.screen.exec.PodExecViewModel
+import dev.nutting.kexplore.ui.screen.health.HealthDashboardScreen
 import dev.nutting.kexplore.ui.screen.logs.PodLogsScreen
 import dev.nutting.kexplore.ui.screen.main.MainScreen
 
@@ -34,6 +35,8 @@ object Routes {
     const val RESOURCE_DETAIL = "resource/{namespace}/{kind}/{name}"
     const val POD_LOGS = "logs/{namespace}/{pod}"
     const val POD_EXEC = "exec/{namespace}/{pod}/{container}"
+
+    const val HEALTH = "health"
 
     const val CLUSTER_SCOPE_SENTINEL = "_cluster"
 
@@ -104,9 +107,23 @@ fun AppNavGraph(
                 onNavigateToDetail = { namespace, kind, name ->
                     navController.navigate(Routes.resourceDetail(namespace, kind, name))
                 },
+                onNavigateToHealth = { navController.navigate(Routes.HEALTH) },
                 actionMessage = actionMessage,
                 onActionMessageShown = {
                     backStackEntry.savedStateHandle.remove<String>("action_message")
+                },
+            )
+        }
+
+        composable(Routes.HEALTH) {
+            val repository by mainViewModel.repository.collectAsState()
+            val uiState by mainViewModel.uiState.collectAsState()
+            HealthDashboardScreen(
+                repository = repository,
+                namespace = uiState.activeNamespace,
+                onBack = { navController.popBackStack() },
+                onNavigateToDetail = { namespace, kind, name ->
+                    navController.navigate(Routes.resourceDetail(namespace, kind, name))
                 },
             )
         }

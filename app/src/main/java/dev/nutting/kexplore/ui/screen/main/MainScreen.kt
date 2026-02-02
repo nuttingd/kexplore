@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.MonitorHeart
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DrawerValue
@@ -58,6 +59,7 @@ fun MainScreen(
     viewModel: MainViewModel,
     onManageConnections: () -> Unit,
     onNavigateToDetail: (namespace: String, kind: ResourceType, name: String) -> Unit,
+    onNavigateToHealth: () -> Unit = {},
     actionMessage: String? = null,
     onActionMessageShown: () -> Unit = {},
 ) {
@@ -124,6 +126,15 @@ fun MainScreen(
                         }
                     },
                     actions = {
+                        IconButton(onClick = onNavigateToHealth) {
+                            if (state.tabAnomalies.totalIssueCount > 0) {
+                                BadgedBox(badge = { Badge { Text("${state.tabAnomalies.totalIssueCount}") } }) {
+                                    Icon(Icons.Default.MonitorHeart, contentDescription = "Cluster Health")
+                                }
+                            } else {
+                                Icon(Icons.Default.MonitorHeart, contentDescription = "Cluster Health")
+                            }
+                        }
                         IconButton(onClick = { showAboutDialog = true }) {
                             Icon(Icons.Outlined.Info, contentDescription = "About")
                         }
