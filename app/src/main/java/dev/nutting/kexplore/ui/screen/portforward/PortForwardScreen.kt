@@ -3,6 +3,8 @@ package dev.nutting.kexplore.ui.screen.portforward
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,6 +20,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Button
@@ -62,6 +65,9 @@ import dev.nutting.kexplore.data.portforward.TargetType
 import dev.nutting.kexplore.ui.components.SectionHeader
 import io.fabric8.kubernetes.client.KubernetesClient
 import kotlinx.coroutines.launch
+import kotlin.random.Random
+
+private fun randomLocalPort(): Int = Random.nextInt(10000, 60000)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -102,7 +108,7 @@ fun PortForwardScreen(
             selectedPod = pod.name
             pod.namedPorts.firstOrNull()?.let {
                 remotePortText = it.port.toString()
-                if (localPortText.isEmpty()) localPortText = it.port.toString()
+                if (localPortText.isEmpty()) localPortText = randomLocalPort().toString()
             }
         }
     }
@@ -112,7 +118,7 @@ fun PortForwardScreen(
             selectedService = svc.name
             svc.namedPorts.firstOrNull()?.let {
                 remotePortText = it.port.toString()
-                if (localPortText.isEmpty()) localPortText = it.port.toString()
+                if (localPortText.isEmpty()) localPortText = randomLocalPort().toString()
             }
         }
     }
@@ -123,7 +129,7 @@ fun PortForwardScreen(
             val pod = uiState.pods.find { it.name == preSelectedPod }
             pod?.namedPorts?.firstOrNull()?.let {
                 remotePortText = it.port.toString()
-                if (localPortText.isEmpty()) localPortText = it.port.toString()
+                if (localPortText.isEmpty()) localPortText = randomLocalPort().toString()
             }
         }
     }
@@ -134,7 +140,7 @@ fun PortForwardScreen(
             val svc = uiState.services.find { it.name == preSelectedService }
             svc?.namedPorts?.firstOrNull()?.let {
                 remotePortText = it.port.toString()
-                if (localPortText.isEmpty()) localPortText = it.port.toString()
+                if (localPortText.isEmpty()) localPortText = randomLocalPort().toString()
             }
         }
     }
@@ -223,7 +229,7 @@ fun PortForwardScreen(
                                         podExpanded = false
                                         pod.namedPorts.firstOrNull()?.let {
                                             remotePortText = it.port.toString()
-                                            if (localPortText.isEmpty()) localPortText = it.port.toString()
+                                            if (localPortText.isEmpty()) localPortText = randomLocalPort().toString()
                                         }
                                     },
                                 )
@@ -269,7 +275,7 @@ fun PortForwardScreen(
                                         serviceExpanded = false
                                         svc.namedPorts.firstOrNull()?.let {
                                             remotePortText = it.port.toString()
-                                            if (localPortText.isEmpty()) localPortText = it.port.toString()
+                                            if (localPortText.isEmpty()) localPortText = randomLocalPort().toString()
                                         }
                                     },
                                 )
@@ -313,7 +319,7 @@ fun PortForwardScreen(
                                     text = { Text(namedPort.displayLabel) },
                                     onClick = {
                                         remotePortText = namedPort.port.toString()
-                                        localPortText = namedPort.port.toString()
+                                        localPortText = randomLocalPort().toString()
                                         portExpanded = false
                                     },
                                 )
@@ -421,6 +427,10 @@ fun PortForwardScreen(
                             clipboard.setPrimaryClip(clip)
                             scope.launch { snackbarHostState.showSnackbar("Copied to clipboard") }
                         },
+                        onOpen = {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("http://localhost:${session.localPort}"))
+                            context.startActivity(intent)
+                        },
                     )
                     Spacer(Modifier.height(8.dp))
                 }
@@ -435,6 +445,7 @@ private fun SessionCard(
     onStop: () -> Unit,
     onRemove: () -> Unit,
     onCopy: () -> Unit,
+    onOpen: () -> Unit,
 ) {
     val statusColor = when (session.status) {
         ForwardStatus.Active -> MaterialTheme.colorScheme.primary
@@ -478,6 +489,9 @@ private fun SessionCard(
                 }
                 Row {
                     if (session.status == ForwardStatus.Active) {
+                        IconButton(onClick = onOpen) {
+                            Icon(Icons.Default.OpenInBrowser, contentDescription = "Open in browser")
+                        }
                         IconButton(onClick = onCopy) {
                             Icon(Icons.Default.ContentCopy, contentDescription = "Copy address")
                         }

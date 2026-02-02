@@ -81,16 +81,24 @@ class PortForwardManager {
                     list.map {
                         if (it.id == sessionId) it.copy(
                             status = ForwardStatus.Failed,
-                            error = "Port ${localPort ?: "auto"} already in use",
+                            error = "Port ${localPort ?: "auto"} already in use: ${e.message}",
                         ) else it
                     }
                 }
             } catch (e: Exception) {
+                val errorDetail = buildString {
+                    append(e::class.simpleName ?: "Unknown")
+                    append(": ")
+                    append(e.message ?: "no message")
+                    e.cause?.let { cause ->
+                        append(" [caused by ${cause::class.simpleName}: ${cause.message}]")
+                    }
+                }
                 _sessions.update { list ->
                     list.map {
                         if (it.id == sessionId) it.copy(
                             status = ForwardStatus.Failed,
-                            error = e.message ?: "Failed to start port forward",
+                            error = errorDetail,
                         ) else it
                     }
                 }
