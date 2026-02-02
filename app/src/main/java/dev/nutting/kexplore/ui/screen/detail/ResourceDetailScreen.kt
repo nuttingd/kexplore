@@ -79,6 +79,7 @@ fun ResourceDetailScreen(
     onViewFullScreenLogs: () -> Unit = {},
     onDeleted: (message: String) -> Unit = {},
     onNavigateToRelated: (namespace: String, kind: ResourceType, name: String) -> Unit = { _, _, _ -> },
+    onPortForward: ((podOrServiceName: String, isPod: Boolean) -> Unit)? = null,
     detailViewModel: ResourceDetailViewModel,
 ) {
     val detailState by detailViewModel.state.collectAsState()
@@ -288,6 +289,19 @@ fun ResourceDetailScreen(
                                     enabled = !detailState.actionInProgress,
                                 )
                             }
+                        }
+                        // Port Forward (Pod and Service)
+                        if (onPortForward != null && (resourceType == ResourceType.Pod || resourceType == ResourceType.Service)) {
+                            DropdownMenuItem(
+                                text = { Text("Port Forward") },
+                                onClick = {
+                                    menuExpanded = false
+                                    onPortForward(resourceName, resourceType == ResourceType.Pod)
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Default.SwapVert, contentDescription = null)
+                                },
+                            )
                         }
                         // Delete (always available)
                         DropdownMenuItem(

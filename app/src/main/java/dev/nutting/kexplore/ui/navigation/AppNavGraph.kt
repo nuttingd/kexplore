@@ -33,6 +33,8 @@ import dev.nutting.kexplore.ui.screen.events.EventStreamScreen
 import dev.nutting.kexplore.ui.screen.health.HealthDashboardScreen
 import dev.nutting.kexplore.ui.screen.logs.PodLogsScreen
 import dev.nutting.kexplore.ui.screen.main.MainScreen
+import dev.nutting.kexplore.ui.screen.portforward.PortForwardScreen
+import dev.nutting.kexplore.ui.screen.portforward.PortForwardViewModel
 import dev.nutting.kexplore.ui.screen.settings.MonitoringSettingsScreen
 
 object Routes {
@@ -50,6 +52,7 @@ object Routes {
     const val QR_SCAN = "setup/qr"
 
     const val MONITORING_SETTINGS = "settings/monitoring"
+    const val PORT_FORWARD = "portforward"
 
     const val CRD_LIST = "crds"
     const val CRD_INSTANCES = "crds/{crdName}"
@@ -148,6 +151,7 @@ fun AppNavGraph(
                 onNavigateToEvents = { navController.navigate(Routes.EVENTS) },
                 onNavigateToCrds = { navController.navigate(Routes.CRD_LIST) },
                 onNavigateToMonitoring = { navController.navigate(Routes.MONITORING_SETTINGS) },
+                onNavigateToPortForward = { navController.navigate(Routes.PORT_FORWARD) },
                 actionMessage = actionMessage,
                 onActionMessageShown = {
                     backStackEntry.savedStateHandle.remove<String>("action_message")
@@ -239,6 +243,13 @@ fun AppNavGraph(
                 onNavigateToRelated = { relNs, relKind, relName ->
                     navController.navigate(Routes.resourceDetail(relNs, relKind, relName))
                 },
+                onPortForward = { podOrServiceName, isPod ->
+                    navController.currentBackStackEntry?.savedStateHandle?.let { handle ->
+                        if (isPod) handle.set("preSelectedPod", podOrServiceName)
+                        else handle.set("preSelectedService", podOrServiceName)
+                    }
+                    navController.navigate(Routes.PORT_FORWARD)
+                },
                 detailViewModel = detailViewModel,
             )
         }
@@ -283,6 +294,26 @@ fun AppNavGraph(
                 container = container.ifEmpty { null },
                 onBack = { navController.popBackStack() },
                 execViewModel = execViewModel,
+            )
+        }
+
+        composable(Routes.PORT_FORWARD) { backStackEntry ->
+            val repository by mainViewModel.repository.collectAsState()
+            val k8sClient by mainViewModel.client.collectAsState()
+            val uiState by mainViewModel.uiState.collectAsState()
+            val portForwardViewModel: PortForwardViewModel = viewModel()
+            val preSelectedPod = backStackEntry.savedStateHandle.get<String>("preSelectedPod")
+            val preSelectedService = backStackEntry.savedStateHandle.get<String>("preSelectedService")
+
+            PortForwardScreen(
+                repository = repository,
+                client = k8sClient,
+                connectionId = uiState.activeConnectionId,
+                namespace = uiState.activeNamespace.ifEmpty { "default" },
+                onBack = { navController.popBackStack() },
+                viewModel = portForwardViewModel,
+                preSelectedPod = preSelectedPod,
+                preSelectedService = preSelectedService,
             )
         }
 

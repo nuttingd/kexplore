@@ -13,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MonitorHeart
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.SyncAlt
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DrawerValue
@@ -65,6 +66,7 @@ fun MainScreen(
     onNavigateToEvents: () -> Unit = {},
     onNavigateToCrds: () -> Unit = {},
     onNavigateToMonitoring: () -> Unit = {},
+    onNavigateToPortForward: () -> Unit = {},
     actionMessage: String? = null,
     onActionMessageShown: () -> Unit = {},
 ) {
@@ -141,6 +143,22 @@ fun MainScreen(
                         }
                     },
                     actions = {
+                        val portForwardCount = remember(appContext) {
+                            appContext.portForwardManager.sessions
+                        }
+                        val pfSessions by portForwardCount.collectAsState()
+                        val activeForwards = pfSessions.count {
+                            it.status == dev.nutting.kexplore.data.portforward.ForwardStatus.Active
+                        }
+                        IconButton(onClick = onNavigateToPortForward) {
+                            if (activeForwards > 0) {
+                                BadgedBox(badge = { Badge { Text("$activeForwards") } }) {
+                                    Icon(Icons.Default.SyncAlt, contentDescription = "Port Forward")
+                                }
+                            } else {
+                                Icon(Icons.Default.SyncAlt, contentDescription = "Port Forward")
+                            }
+                        }
                         IconButton(onClick = onNavigateToHealth) {
                             if (state.tabAnomalies.totalIssueCount > 0) {
                                 BadgedBox(badge = { Badge { Text("${state.tabAnomalies.totalIssueCount}") } }) {

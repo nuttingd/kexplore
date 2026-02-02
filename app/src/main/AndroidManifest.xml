@@ -32,6 +32,11 @@
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
+        <service
+            android:name=".data.portforward.PortForwardService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
         <receiver
             android:name=".widget.ClusterStatusWidgetReceiver"
             android:exported="false">

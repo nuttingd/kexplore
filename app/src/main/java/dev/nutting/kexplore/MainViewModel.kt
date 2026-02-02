@@ -46,7 +46,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private var connectJob: Job? = null
     private var anomalyJob: Job? = null
-    private var client: KubernetesClient? = null
+
+    private val _client = MutableStateFlow<KubernetesClient?>(null)
+    val client: StateFlow<KubernetesClient?> = _client.asStateFlow()
+    private var clientInstance: KubernetesClient?
+        get() = _client.value
+        set(value) { _client.value = value }
 
     private val _repository = MutableStateFlow<KubernetesRepository?>(null)
     val repository: StateFlow<KubernetesRepository?> = _repository.asStateFlow()
@@ -74,6 +79,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun connectToCluster(connectionId: String) {
         val connection = connectionStore.getConnection(connectionId) ?: return
+
+        // Stop port forwards for old connection
+        val oldConnectionId = _uiState.value.activeConnectionId
+        if (oldConnectionId != null && oldConnectionId != connectionId) {
+            getApplication<KexploreApp>().portForwardManager.stopForConnection(oldConnectionId)
+        }
+
         _uiState.update {
             it.copy(
                 activeConnectionId = connectionId,
@@ -90,8 +102,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val newClient = withContext(Dispatchers.IO) {
                     KubernetesClientFactory.createClient(connection)
                 }
-                client?.close()
-                client = newClient
+                clientInstance?.close()
+                clientInstance = newClient
                 _repository.value = KubernetesRepository(newClient)
                 _metricsRepository.value = MetricsRepository(newClient)
                 _crdRepository.value = CrdRepository(newClient)
@@ -170,6 +182,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     override fun onCleared() {
         super.onCleared()
         anomalyJob?.cancel()
-        client?.close()
+        clientInstance?.close()
     }
 }

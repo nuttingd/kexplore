@@ -9,6 +9,7 @@ import dev.nutting.kexplore.data.connection.ConnectionStore
 import dev.nutting.kexplore.data.notification.ClusterMonitorWorker
 import dev.nutting.kexplore.data.notification.MonitoringPreferences
 import dev.nutting.kexplore.data.notification.NotificationHelper
+import dev.nutting.kexplore.data.portforward.PortForwardManager
 import dev.nutting.kexplore.widget.WidgetRefreshWorker
 import java.util.concurrent.TimeUnit
 
@@ -23,11 +24,15 @@ class KexploreApp : Application() {
     lateinit var monitoringPreferences: MonitoringPreferences
         private set
 
+    lateinit var portForwardManager: PortForwardManager
+        private set
+
     override fun onCreate() {
         super.onCreate()
         connectionStore = ConnectionStore(this)
         resourceCache = ResourceCache(this)
         monitoringPreferences = MonitoringPreferences(this)
+        portForwardManager = PortForwardManager()
         NotificationHelper.createChannels(this)
         scheduleWidgetRefresh()
         scheduleClusterMonitor()

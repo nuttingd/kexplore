@@ -1,5 +1,6 @@
 package dev.nutting.kexplore.data.notification
 
+import android.annotation.SuppressLint
 import android.Manifest
 import android.app.Service
 import android.content.Intent
@@ -63,6 +64,7 @@ class ClusterWatchService : Service() {
         return START_STICKY
     }
 
+    @SuppressLint("MissingPermission") // Service notification uses FOREGROUND_SERVICE permission
     private suspend fun startWatching(app: KexploreApp) {
         stopWatches()
 
