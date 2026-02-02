@@ -64,6 +64,7 @@ fun MainScreen(
     onNavigateToHealth: () -> Unit = {},
     onNavigateToEvents: () -> Unit = {},
     onNavigateToCrds: () -> Unit = {},
+    onNavigateToMonitoring: () -> Unit = {},
     actionMessage: String? = null,
     onActionMessageShown: () -> Unit = {},
 ) {
@@ -108,6 +109,10 @@ fun MainScreen(
                 onNavigateToCrds = {
                     scope.launch { drawerState.close() }
                     onNavigateToCrds()
+                },
+                onNavigateToMonitoring = {
+                    scope.launch { drawerState.close() }
+                    onNavigateToMonitoring()
                 },
             )
         },

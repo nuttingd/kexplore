@@ -6,6 +6,9 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import dev.nutting.kexplore.data.cache.ResourceCache
 import dev.nutting.kexplore.data.connection.ConnectionStore
+import dev.nutting.kexplore.data.notification.ClusterMonitorWorker
+import dev.nutting.kexplore.data.notification.MonitoringPreferences
+import dev.nutting.kexplore.data.notification.NotificationHelper
 import dev.nutting.kexplore.widget.WidgetRefreshWorker
 import java.util.concurrent.TimeUnit
 
@@ -17,11 +20,29 @@ class KexploreApp : Application() {
     lateinit var resourceCache: ResourceCache
         private set
 
+    lateinit var monitoringPreferences: MonitoringPreferences
+        private set
+
     override fun onCreate() {
         super.onCreate()
         connectionStore = ConnectionStore(this)
         resourceCache = ResourceCache(this)
+        monitoringPreferences = MonitoringPreferences(this)
+        NotificationHelper.createChannels(this)
         scheduleWidgetRefresh()
+        scheduleClusterMonitor()
+    }
+
+    private fun scheduleClusterMonitor() {
+        val request = PeriodicWorkRequestBuilder<ClusterMonitorWorker>(
+            15, TimeUnit.MINUTES,
+        ).build()
+
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            ClusterMonitorWorker.WORK_NAME,
+            ExistingPeriodicWorkPolicy.KEEP,
+            request,
+        )
     }
 
     private fun scheduleWidgetRefresh() {

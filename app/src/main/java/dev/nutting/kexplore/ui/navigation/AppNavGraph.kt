@@ -33,6 +33,7 @@ import dev.nutting.kexplore.ui.screen.events.EventStreamScreen
 import dev.nutting.kexplore.ui.screen.health.HealthDashboardScreen
 import dev.nutting.kexplore.ui.screen.logs.PodLogsScreen
 import dev.nutting.kexplore.ui.screen.main.MainScreen
+import dev.nutting.kexplore.ui.screen.settings.MonitoringSettingsScreen
 
 object Routes {
     const val SETUP = "setup"
@@ -47,6 +48,8 @@ object Routes {
     const val HEALTH = "health"
     const val EVENTS = "events"
     const val QR_SCAN = "setup/qr"
+
+    const val MONITORING_SETTINGS = "settings/monitoring"
 
     const val CRD_LIST = "crds"
     const val CRD_INSTANCES = "crds/{crdName}"
@@ -144,6 +147,7 @@ fun AppNavGraph(
                 onNavigateToHealth = { navController.navigate(Routes.HEALTH) },
                 onNavigateToEvents = { navController.navigate(Routes.EVENTS) },
                 onNavigateToCrds = { navController.navigate(Routes.CRD_LIST) },
+                onNavigateToMonitoring = { navController.navigate(Routes.MONITORING_SETTINGS) },
                 actionMessage = actionMessage,
                 onActionMessageShown = {
                     backStackEntry.savedStateHandle.remove<String>("action_message")
@@ -279,6 +283,12 @@ fun AppNavGraph(
                 container = container.ifEmpty { null },
                 onBack = { navController.popBackStack() },
                 execViewModel = execViewModel,
+            )
+        }
+
+        composable(Routes.MONITORING_SETTINGS) {
+            MonitoringSettingsScreen(
+                onBack = { navController.popBackStack() },
             )
         }
 
