@@ -52,6 +52,8 @@ import dev.nutting.kexplore.MainViewModel
 import dev.nutting.kexplore.R
 import dev.nutting.kexplore.data.model.ResourceType
 import dev.nutting.kexplore.ui.navigation.BottomTab
+import dev.nutting.kexplore.ui.screen.crd.CrdListContent
+import dev.nutting.kexplore.ui.screen.crd.CrdListViewModel
 import dev.nutting.kexplore.ui.screen.resources.ResourceListScreen
 import dev.nutting.kexplore.ui.screen.resources.ResourceListViewModel
 import kotlinx.coroutines.launch
@@ -64,7 +66,7 @@ fun MainScreen(
     onNavigateToDetail: (namespace: String, kind: ResourceType, name: String) -> Unit,
     onNavigateToHealth: () -> Unit = {},
     onNavigateToEvents: () -> Unit = {},
-    onNavigateToCrds: () -> Unit = {},
+    onNavigateToCrdInstances: (crdName: String) -> Unit = {},
     onNavigateToMonitoring: () -> Unit = {},
     onNavigateToPortForward: () -> Unit = {},
     actionMessage: String? = null,
@@ -75,6 +77,7 @@ fun MainScreen(
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val resourceListViewModel: ResourceListViewModel = viewModel()
+    val crdListViewModel: CrdListViewModel = viewModel()
     val appContext = LocalContext.current.applicationContext as KexploreApp
     val resourceCache = remember { appContext.resourceCache }
     var showAboutDialog by remember { mutableStateOf(false) }
@@ -108,10 +111,6 @@ fun MainScreen(
                     scope.launch { drawerState.close() }
                     onManageConnections()
                 },
-                onNavigateToCrds = {
-                    scope.launch { drawerState.close() }
-                    onNavigateToCrds()
-                },
                 onNavigateToMonitoring = {
                     scope.launch { drawerState.close() }
                     onNavigateToMonitoring()
@@ -127,11 +126,13 @@ fun MainScreen(
                         Text(
                             viewModel.getActiveConnectionName()
                                 ?.let { clusterName ->
-                                    if (state.selectedTab == BottomTab.Cluster) {
-                                        "$clusterName / Cluster Resources"
-                                    } else {
-                                        val ns = state.activeNamespace.ifEmpty { "All Namespaces" }
-                                        "$clusterName / $ns"
+                                    when (state.selectedTab) {
+                                        BottomTab.Cluster -> "$clusterName / Cluster Resources"
+                                        BottomTab.Custom -> "$clusterName / Custom Resources"
+                                        else -> {
+                                            val ns = state.activeNamespace.ifEmpty { "All Namespaces" }
+                                            "$clusterName / $ns"
+                                        }
                                     }
                                 }
                                 ?: "Kexplore"
@@ -203,20 +204,30 @@ fun MainScreen(
                 }
             },
         ) { padding ->
-            ResourceListScreen(
-                repository = repository,
-                namespace = state.activeNamespace,
-                category = state.selectedTab.category,
-                isConnected = state.isConnected,
-                connectionError = state.connectionError,
-                modifier = Modifier.padding(padding),
-                onResourceClick = { summary ->
-                    onNavigateToDetail(summary.namespace, summary.kind, summary.name)
-                },
-                listViewModel = resourceListViewModel,
-                cache = resourceCache,
-                connectionId = state.activeConnectionId,
-            )
+            if (state.selectedTab == BottomTab.Custom) {
+                val crdRepository by viewModel.crdRepository.collectAsState()
+                CrdListContent(
+                    crdRepository = crdRepository,
+                    onCrdClick = onNavigateToCrdInstances,
+                    viewModel = crdListViewModel,
+                    modifier = Modifier.padding(padding),
+                )
+            } else {
+                ResourceListScreen(
+                    repository = repository,
+                    namespace = state.activeNamespace,
+                    category = state.selectedTab.category!!,
+                    isConnected = state.isConnected,
+                    connectionError = state.connectionError,
+                    modifier = Modifier.padding(padding),
+                    onResourceClick = { summary ->
+                        onNavigateToDetail(summary.namespace, summary.kind, summary.name)
+                    },
+                    listViewModel = resourceListViewModel,
+                    cache = resourceCache,
+                    connectionId = state.activeConnectionId,
+                )
+            }
         }
     }
 }

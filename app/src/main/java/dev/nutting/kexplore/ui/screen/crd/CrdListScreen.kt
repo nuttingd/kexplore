@@ -47,13 +47,6 @@ fun CrdListScreen(
     onCrdClick: (crdName: String) -> Unit,
     viewModel: CrdListViewModel,
 ) {
-    val state by viewModel.state.collectAsState()
-    var searchQuery by remember { mutableStateOf("") }
-
-    LaunchedEffect(crdRepository) {
-        viewModel.loadCrds(crdRepository)
-    }
-
     Scaffold(
         topBar = {
             TopAppBar(
@@ -66,67 +59,88 @@ fun CrdListScreen(
             )
         },
     ) { padding ->
-        Column(
+        CrdListContent(
+            crdRepository = crdRepository,
+            onCrdClick = onCrdClick,
+            viewModel = viewModel,
+            modifier = Modifier.padding(padding),
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CrdListContent(
+    crdRepository: CrdRepository?,
+    onCrdClick: (crdName: String) -> Unit,
+    viewModel: CrdListViewModel,
+    modifier: Modifier = Modifier,
+) {
+    val state by viewModel.state.collectAsState()
+    var searchQuery by remember { mutableStateOf("") }
+
+    LaunchedEffect(crdRepository) {
+        viewModel.loadCrds(crdRepository)
+    }
+
+    Column(
+        modifier = modifier.fillMaxSize(),
+    ) {
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = { searchQuery = it },
+            placeholder = { Text("Search CRDs...") },
+            leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") },
+            trailingIcon = {
+                if (searchQuery.isNotEmpty()) {
+                    IconButton(onClick = { searchQuery = "" }) {
+                        Icon(Icons.Default.Clear, contentDescription = "Clear")
+                    }
+                }
+            },
+            singleLine = true,
             modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+        )
+
+        PullToRefreshBox(
+            isRefreshing = state.isRefreshing,
+            onRefresh = { viewModel.loadCrds(crdRepository, isRefresh = true) },
+            modifier = Modifier.fillMaxSize(),
         ) {
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                placeholder = { Text("Search CRDs...") },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") },
-                trailingIcon = {
-                    if (searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { searchQuery = "" }) {
-                            Icon(Icons.Default.Clear, contentDescription = "Clear")
+            ContentStateHost(
+                state = state.crds,
+                onRetry = { viewModel.loadCrds(crdRepository) },
+            ) { crds ->
+                val filtered by remember(crds, searchQuery) {
+                    derivedStateOf {
+                        if (searchQuery.isBlank()) crds
+                        else crds.filter { crd ->
+                            crd.kind.contains(searchQuery, ignoreCase = true) ||
+                                crd.group.contains(searchQuery, ignoreCase = true) ||
+                                crd.name.contains(searchQuery, ignoreCase = true)
                         }
                     }
-                },
-                singleLine = true,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp),
-            )
+                }
 
-            PullToRefreshBox(
-                isRefreshing = state.isRefreshing,
-                onRefresh = { viewModel.loadCrds(crdRepository, isRefresh = true) },
-                modifier = Modifier.fillMaxSize(),
-            ) {
-                ContentStateHost(
-                    state = state.crds,
-                    onRetry = { viewModel.loadCrds(crdRepository) },
-                ) { crds ->
-                    val filtered by remember(crds, searchQuery) {
-                        derivedStateOf {
-                            if (searchQuery.isBlank()) crds
-                            else crds.filter { crd ->
-                                crd.kind.contains(searchQuery, ignoreCase = true) ||
-                                    crd.group.contains(searchQuery, ignoreCase = true) ||
-                                    crd.name.contains(searchQuery, ignoreCase = true)
+                if (filtered.isEmpty()) {
+                    EmptyContent(message = "No CRDs found")
+                } else {
+                    val grouped = remember(filtered) {
+                        filtered.groupBy { it.group }.toSortedMap()
+                    }
+                    LazyColumn {
+                        grouped.forEach { (group, definitions) ->
+                            item(key = "header_$group") {
+                                SectionHeader(group)
                             }
-                        }
-                    }
-
-                    if (filtered.isEmpty()) {
-                        EmptyContent(message = "No CRDs found")
-                    } else {
-                        val grouped = remember(filtered) {
-                            filtered.groupBy { it.group }.toSortedMap()
-                        }
-                        LazyColumn {
-                            grouped.forEach { (group, definitions) ->
-                                item(key = "header_$group") {
-                                    SectionHeader(group)
-                                }
-                                items(definitions, key = { it.name }) { crd ->
-                                    CrdListItem(
-                                        crd = crd,
-                                        onClick = { onCrdClick(crd.name) },
-                                    )
-                                    HorizontalDivider()
-                                }
+                            items(definitions, key = { it.name }) { crd ->
+                                CrdListItem(
+                                    crd = crd,
+                                    onClick = { onCrdClick(crd.name) },
+                                )
+                                HorizontalDivider()
                             }
                         }
                     }

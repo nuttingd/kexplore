@@ -149,7 +149,9 @@ fun AppNavGraph(
                 },
                 onNavigateToHealth = { navController.navigate(Routes.HEALTH) },
                 onNavigateToEvents = { navController.navigate(Routes.EVENTS) },
-                onNavigateToCrds = { navController.navigate(Routes.CRD_LIST) },
+                onNavigateToCrdInstances = { crdName ->
+                    navController.navigate(Routes.crdInstances(crdName))
+                },
                 onNavigateToMonitoring = { navController.navigate(Routes.MONITORING_SETTINGS) },
                 onNavigateToPortForward = { navController.navigate(Routes.PORT_FORWARD) },
                 actionMessage = actionMessage,
