@@ -4,9 +4,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -23,6 +25,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import dev.nutting.kexplore.data.cache.ResourceCache
 import dev.nutting.kexplore.data.kubernetes.KubernetesRepository
 import dev.nutting.kexplore.data.model.ResourceCategory
 import dev.nutting.kexplore.data.model.ResourceStatus
@@ -37,6 +41,7 @@ import dev.nutting.kexplore.ui.components.SearchFilterBar
 import dev.nutting.kexplore.ui.components.SwipeToDeleteContainer
 import dev.nutting.kexplore.util.ErrorMapper
 import kotlinx.coroutines.launch
+import java.util.concurrent.TimeUnit
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -49,6 +54,8 @@ fun ResourceListScreen(
     modifier: Modifier = Modifier,
     onResourceClick: (ResourceSummary) -> Unit,
     listViewModel: ResourceListViewModel,
+    cache: ResourceCache? = null,
+    connectionId: String? = null,
 ) {
     val types = ResourceType.forCategory(category)
     var selectedType by remember(category) { mutableStateOf(types.first()) }
@@ -69,12 +76,12 @@ fun ResourceListScreen(
 
     // Load resources on type/namespace/connection change
     LaunchedEffect(selectedType, effectiveNamespace, isConnected, repository) {
-        listViewModel.loadResources(repository, effectiveNamespace, selectedType, isConnected, connectionError)
+        listViewModel.loadResources(repository, effectiveNamespace, selectedType, isConnected, connectionError, cache = cache, connectionId = connectionId)
     }
 
     // Auto-refresh while screen is visible
     LaunchedEffect(selectedType, effectiveNamespace, isConnected, repository) {
-        listViewModel.startAutoRefresh(repository, effectiveNamespace, selectedType, isConnected, connectionError)
+        listViewModel.startAutoRefresh(repository, effectiveNamespace, selectedType, isConnected, connectionError, cache = cache, connectionId = connectionId)
     }
 
     DisposableEffect(Unit) {
@@ -95,7 +102,7 @@ fun ResourceListScreen(
                         try {
                             repository?.deleteResource(t.namespace, t.kind, t.name)
                             snackbarHostState.showSnackbar("${t.kind.displayName} '${t.name}' deleted")
-                            listViewModel.loadResources(repository, effectiveNamespace, selectedType, isConnected, connectionError, isRefresh = true)
+                            listViewModel.loadResources(repository, effectiveNamespace, selectedType, isConnected, connectionError, isRefresh = true, cache = cache, connectionId = connectionId)
                         } catch (e: Exception) {
                             snackbarHostState.showSnackbar(ErrorMapper.map(e))
                         }
@@ -126,7 +133,7 @@ fun ResourceListScreen(
                         try {
                             repository?.restartResource(t.namespace, t.kind, t.name)
                             snackbarHostState.showSnackbar("${t.kind.displayName} '${t.name}' restarting")
-                            listViewModel.loadResources(repository, effectiveNamespace, selectedType, isConnected, connectionError, isRefresh = true)
+                            listViewModel.loadResources(repository, effectiveNamespace, selectedType, isConnected, connectionError, isRefresh = true, cache = cache, connectionId = connectionId)
                         } catch (e: Exception) {
                             snackbarHostState.showSnackbar(ErrorMapper.map(e))
                         }
@@ -189,7 +196,7 @@ fun ResourceListScreen(
                     try {
                         repository?.scaleResource(t.namespace, t.kind, t.name, replicas)
                         snackbarHostState.showSnackbar("Scaled '${t.name}' to $replicas replicas")
-                        listViewModel.loadResources(repository, effectiveNamespace, selectedType, isConnected, connectionError, isRefresh = true)
+                        listViewModel.loadResources(repository, effectiveNamespace, selectedType, isConnected, connectionError, isRefresh = true, cache = cache, connectionId = connectionId)
                     } catch (e: Exception) {
                         snackbarHostState.showSnackbar(ErrorMapper.map(e))
                     }
@@ -220,19 +227,30 @@ fun ResourceListScreen(
             onLabelFilterChange = { labelFilter = it },
         )
 
+        // "Updated X ago" indicator
+        listState.lastUpdated?.let { millis ->
+            val ago = formatTimeAgo(millis)
+            Text(
+                text = "Updated $ago",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
+            )
+        }
+
         SnackbarHost(snackbarHostState)
 
         PullToRefreshBox(
             isRefreshing = listState.isRefreshing,
             onRefresh = {
-                listViewModel.loadResources(repository, effectiveNamespace, selectedType, isConnected, connectionError, isRefresh = true)
+                listViewModel.loadResources(repository, effectiveNamespace, selectedType, isConnected, connectionError, isRefresh = true, cache = cache, connectionId = connectionId)
             },
             modifier = Modifier.fillMaxSize(),
         ) {
             ContentStateHost(
                 state = listState.resources,
                 onRetry = {
-                    listViewModel.loadResources(repository, effectiveNamespace, selectedType, isConnected, connectionError, isRefresh = true)
+                    listViewModel.loadResources(repository, effectiveNamespace, selectedType, isConnected, connectionError, isRefresh = true, cache = cache, connectionId = connectionId)
                 },
             ) { items ->
                 val filtered by remember(items, searchQuery, statusFilters, labelFilter) {
@@ -305,5 +323,15 @@ fun ResourceListScreen(
                 }
             }
         }
+    }
+}
+
+private fun formatTimeAgo(millis: Long): String {
+    val diff = System.currentTimeMillis() - millis
+    return when {
+        diff < TimeUnit.MINUTES.toMillis(1) -> "just now"
+        diff < TimeUnit.HOURS.toMillis(1) -> "${TimeUnit.MILLISECONDS.toMinutes(diff)}m ago"
+        diff < TimeUnit.DAYS.toMillis(1) -> "${TimeUnit.MILLISECONDS.toHours(diff)}h ago"
+        else -> "${TimeUnit.MILLISECONDS.toDays(diff)}d ago"
     }
 }

@@ -46,6 +46,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.nutting.kexplore.BuildConfig
+import dev.nutting.kexplore.KexploreApp
 import dev.nutting.kexplore.MainViewModel
 import dev.nutting.kexplore.R
 import dev.nutting.kexplore.data.model.ResourceType
@@ -70,6 +71,8 @@ fun MainScreen(
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val resourceListViewModel: ResourceListViewModel = viewModel()
+    val appContext = LocalContext.current.applicationContext as KexploreApp
+    val resourceCache = remember { appContext.resourceCache }
     var showAboutDialog by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -183,6 +186,8 @@ fun MainScreen(
                     onNavigateToDetail(summary.namespace, summary.kind, summary.name)
                 },
                 listViewModel = resourceListViewModel,
+                cache = resourceCache,
+                connectionId = state.activeConnectionId,
             )
         }
     }

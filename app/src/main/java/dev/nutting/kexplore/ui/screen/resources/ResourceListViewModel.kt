@@ -2,6 +2,7 @@ package dev.nutting.kexplore.ui.screen.resources
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dev.nutting.kexplore.data.cache.ResourceCache
 import dev.nutting.kexplore.data.kubernetes.KubernetesRepository
 import dev.nutting.kexplore.data.model.ContentState
 import dev.nutting.kexplore.data.model.ResourceSummary
@@ -19,6 +20,7 @@ import kotlin.coroutines.cancellation.CancellationException
 data class ResourceListState(
     val resources: ContentState<List<ResourceSummary>> = ContentState.Loading,
     val isRefreshing: Boolean = false,
+    val lastUpdated: Long? = null,
 )
 
 class ResourceListViewModel : ViewModel() {
@@ -36,9 +38,25 @@ class ResourceListViewModel : ViewModel() {
         isConnected: Boolean,
         connectionError: String?,
         isRefresh: Boolean = false,
+        cache: ResourceCache? = null,
+        connectionId: String? = null,
     ) {
         loadJob?.cancel()
         if (!isConnected || repository == null) {
+            // Try showing cached data even when disconnected
+            if (cache != null && connectionId != null) {
+                val cached = cache.get(connectionId, namespace, type)
+                if (cached != null) {
+                    _state.update {
+                        it.copy(
+                            resources = ContentState.Success(cached.items),
+                            isRefreshing = false,
+                            lastUpdated = cached.lastUpdatedMillis,
+                        )
+                    }
+                    return
+                }
+            }
             _state.update {
                 it.copy(
                     resources = if (connectionError != null) {
@@ -52,25 +70,61 @@ class ResourceListViewModel : ViewModel() {
             return
         }
 
-        _state.update {
-            it.copy(
-                resources = if (isRefresh) it.resources else ContentState.Loading,
-                isRefreshing = isRefresh,
-            )
+        // Show cached data immediately while refreshing
+        if (!isRefresh && cache != null && connectionId != null) {
+            val cached = cache.get(connectionId, namespace, type)
+            if (cached != null) {
+                _state.update {
+                    it.copy(
+                        resources = ContentState.Success(cached.items),
+                        isRefreshing = true,
+                        lastUpdated = cached.lastUpdatedMillis,
+                    )
+                }
+            } else {
+                _state.update { it.copy(resources = ContentState.Loading, isRefreshing = false) }
+            }
+        } else {
+            _state.update {
+                it.copy(
+                    resources = if (isRefresh) it.resources else ContentState.Loading,
+                    isRefreshing = isRefresh,
+                )
+            }
         }
 
         loadJob = viewModelScope.launch {
             try {
                 val effectiveNamespace = if (type.isClusterScoped) "" else namespace
                 val result = repository.getResources(effectiveNamespace, type)
+                val now = System.currentTimeMillis()
+
+                // Update cache
+                if (cache != null && connectionId != null) {
+                    cache.put(connectionId, namespace, type, result)
+                }
+
                 _state.update {
-                    it.copy(resources = ContentState.Success(result), isRefreshing = false)
+                    it.copy(
+                        resources = ContentState.Success(result),
+                        isRefreshing = false,
+                        lastUpdated = now,
+                    )
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update {
-                    it.copy(resources = ContentState.Error(ErrorMapper.map(e)), isRefreshing = false)
+                // If we have cached data, keep showing it
+                val current = _state.value
+                if (current.resources is ContentState.Success) {
+                    _state.update { it.copy(isRefreshing = false) }
+                } else {
+                    _state.update {
+                        it.copy(
+                            resources = ContentState.Error(ErrorMapper.map(e)),
+                            isRefreshing = false,
+                        )
+                    }
                 }
             }
         }
@@ -82,12 +136,14 @@ class ResourceListViewModel : ViewModel() {
         type: ResourceType,
         isConnected: Boolean,
         connectionError: String?,
+        cache: ResourceCache? = null,
+        connectionId: String? = null,
     ) {
         autoRefreshJob?.cancel()
         autoRefreshJob = viewModelScope.launch {
             while (true) {
                 delay(30_000)
-                loadResources(repository, namespace, type, isConnected, connectionError, isRefresh = true)
+                loadResources(repository, namespace, type, isConnected, connectionError, isRefresh = true, cache = cache, connectionId = connectionId)
             }
         }
     }
