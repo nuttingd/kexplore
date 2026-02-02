@@ -38,6 +38,7 @@ import com.patrykandpatrick.vico.core.cartesian.axis.VerticalAxis
 import com.patrykandpatrick.vico.compose.cartesian.rememberVicoScrollState
 import com.patrykandpatrick.vico.core.cartesian.data.CartesianChartModelProducer
 import com.patrykandpatrick.vico.core.cartesian.data.lineSeries
+import com.patrykandpatrick.vico.core.cartesian.data.CartesianValueFormatter
 import dev.nutting.kexplore.data.kubernetes.MetricsRepository
 import dev.nutting.kexplore.data.metrics.MetricsCollector
 import dev.nutting.kexplore.data.model.ResourceMetricsSnapshot
@@ -48,7 +49,7 @@ private val INTERVAL_OPTIONS = listOf(1_000L, 2_000L, 5_000L, 10_000L, 30_000L)
 
 private fun intervalLabel(ms: Long): String = if (ms < 60_000) "${ms / 1000}s" else "${ms / 60_000}m"
 
-private fun windowSlots(intervalMs: Long): Int = ((5 * 60 * 1000) / intervalMs).toInt()
+private fun windowSlots(intervalMs: Long): Int = ((60 * 1000) / intervalMs).toInt()
 
 @Composable
 fun MetricsTab(
@@ -203,11 +204,19 @@ private fun MetricsChartCard(
 
             Spacer(Modifier.height(8.dp))
 
+            // X-axis labels show seconds ago relative to the right edge (e.g. "60s", "30s", "0s")
+            val xFormatter = remember(windowSlots, pollIntervalMs) {
+                CartesianValueFormatter { _, value, _ ->
+                    val secondsAgo = ((windowSlots - 1 - value.toInt()) * pollIntervalMs / 1000).toInt()
+                    "${secondsAgo}s"
+                }
+            }
+
             CartesianChartHost(
                 rememberCartesianChart(
                     rememberLineCartesianLayer(),
                     startAxis = VerticalAxis.rememberStart(),
-                    bottomAxis = HorizontalAxis.rememberBottom(),
+                    bottomAxis = HorizontalAxis.rememberBottom(valueFormatter = xFormatter),
                 ),
                 modelProducer,
                 modifier = Modifier

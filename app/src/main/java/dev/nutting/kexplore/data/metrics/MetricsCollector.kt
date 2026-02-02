@@ -27,7 +27,7 @@ class MetricsCollector(
     private val _metricsAvailable = MutableStateFlow<Boolean?>(null)
     val metricsAvailable: StateFlow<Boolean?> = _metricsAvailable.asStateFlow()
 
-    private val maxSamples = ((5 * 60 * 1000) / pollIntervalMs).toInt()
+    private val maxSamples = ((60 * 1000) / pollIntervalMs).toInt()
     private val bufferMutex = Mutex()
     private val buffer = ArrayDeque<ResourceMetricsSnapshot>(maxSamples)
     private var pollingJob: Job? = null
