@@ -27,7 +27,7 @@ class MetricsCollector(
     private val _metricsAvailable = MutableStateFlow<Boolean?>(null)
     val metricsAvailable: StateFlow<Boolean?> = _metricsAvailable.asStateFlow()
 
-    private val maxSamples = ((60 * 1000) / pollIntervalMs).toInt()
+    private val maxSamples = windowSlots(pollIntervalMs)
     private val bufferMutex = Mutex()
     private val buffer = ArrayDeque<ResourceMetricsSnapshot>(maxSamples)
     private var pollingJob: Job? = null
@@ -105,5 +105,8 @@ class MetricsCollector(
 
     companion object {
         const val DEFAULT_POLL_INTERVAL_MS = 2_000L
+        const val WINDOW_DURATION_MS = 60_000L
+
+        fun windowSlots(intervalMs: Long): Int = (WINDOW_DURATION_MS / intervalMs).toInt()
     }
 }

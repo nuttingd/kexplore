@@ -49,7 +49,7 @@ private val INTERVAL_OPTIONS = listOf(1_000L, 2_000L, 5_000L, 10_000L, 30_000L)
 
 private fun intervalLabel(ms: Long): String = if (ms < 60_000) "${ms / 1000}s" else "${ms / 60_000}m"
 
-private fun windowSlots(intervalMs: Long): Int = ((60 * 1000) / intervalMs).toInt()
+private fun windowSlots(intervalMs: Long): Int = MetricsCollector.windowSlots(intervalMs)
 
 @Composable
 fun MetricsTab(
@@ -85,8 +85,8 @@ fun MetricsTab(
     val slots = windowSlots(pollIntervalMs)
 
     when (metricsAvailable) {
-        null -> EmptyContent(message ="Checking metrics availability...")
-        false -> EmptyContent(message ="Metrics unavailable — install metrics-server")
+        null -> EmptyContent(message = "Checking metrics availability...")
+        false -> EmptyContent(message = "Metrics unavailable — install metrics-server")
         true -> {
             Column(
                 modifier = Modifier
@@ -207,7 +207,8 @@ private fun MetricsChartCard(
             // X-axis labels show seconds ago relative to the right edge (e.g. "60s", "30s", "0s")
             val xFormatter = remember(windowSlots, pollIntervalMs) {
                 CartesianValueFormatter { _, value, _ ->
-                    val secondsAgo = ((windowSlots - 1 - value.toInt()) * pollIntervalMs / 1000).toInt()
+                    val index = value.toInt().coerceIn(0, windowSlots - 1)
+                    val secondsAgo = ((windowSlots - 1 - index) * pollIntervalMs / 1000).toInt()
                     "${secondsAgo}s"
                 }
             }

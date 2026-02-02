@@ -108,7 +108,10 @@ fun ResourceListScreen(
     }
 
     DisposableEffect(Unit) {
-        onDispose { listViewModel.stopAutoRefresh() }
+        onDispose {
+            listViewModel.stopAutoRefresh()
+            listViewModel.clearSelection()
+        }
     }
 
     // Delete confirmation dialog

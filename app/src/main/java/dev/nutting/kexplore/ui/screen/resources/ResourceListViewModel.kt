@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import android.util.Log
 import kotlin.coroutines.cancellation.CancellationException
 
 data class ResourceListState(
@@ -202,7 +203,8 @@ class ResourceListViewModel : ViewModel() {
                 try {
                     repository.deleteResource(item.namespace, item.kind, item.name)
                     success++
-                } catch (_: Exception) {
+                } catch (e: Exception) {
+                    Log.e("ResourceListViewModel", "Failed to delete ${item.kind.displayName} ${item.name}", e)
                     fail++
                 }
             }
