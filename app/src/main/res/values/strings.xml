@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Kexplore</string>
+    <string name="widget_description">Shows cluster pod and node status at a glance</string>
 </resources>

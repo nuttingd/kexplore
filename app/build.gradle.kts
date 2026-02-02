@@ -123,6 +123,16 @@ dependencies {
     // Charts (Vico)
     implementation("com.patrykandpatrick.vico:compose-m3:2.1.0")
 
+    // Glance widget
+    implementation("androidx.glance:glance-appwidget:1.1.1")
+    implementation("androidx.glance:glance-material3:1.1.1")
+
+    // WorkManager
+    implementation("androidx.work:work-runtime-ktx:2.10.0")
+
+    // DataStore
+    implementation("androidx.datastore:datastore-preferences:1.1.2")
+
     // CameraX + ML Kit for QR scanning
     implementation("androidx.camera:camera-camera2:1.4.1")
     implementation("androidx.camera:camera-lifecycle:1.4.1")
