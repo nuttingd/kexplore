@@ -333,7 +333,7 @@ fun AppNavGraph(
                 repository = repository,
                 client = k8sClient,
                 connectionId = uiState.activeConnectionId,
-                namespace = uiState.activeNamespace.ifEmpty { "default" },
+                namespace = uiState.activeNamespace,
                 onBack = { navController.popBackStack() },
                 viewModel = portForwardViewModel,
                 preSelectedPod = preSelectedPod,

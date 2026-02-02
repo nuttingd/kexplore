@@ -345,10 +345,12 @@ fun PortForwardScreen(
                         val k8sClient = client ?: return@Button
 
                         if (targetTypeIndex == 0) {
+                            val pod = uiState.pods.find { it.name == selectedPod }
+                            val podNs = pod?.namespace ?: namespace
                             viewModel.startForward(
                                 client = k8sClient,
                                 connectionId = connId,
-                                namespace = namespace,
+                                namespace = podNs,
                                 podName = selectedPod,
                                 remotePort = remotePort,
                                 localPort = localPort,
@@ -361,7 +363,7 @@ fun PortForwardScreen(
                                         viewModel.startForward(
                                             client = k8sClient,
                                             connectionId = connId,
-                                            namespace = namespace,
+                                            namespace = svc.namespace,
                                             podName = podName,
                                             remotePort = remotePort,
                                             localPort = localPort,
