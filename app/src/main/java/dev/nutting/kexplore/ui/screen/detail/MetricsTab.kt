@@ -1,0 +1,187 @@
+package dev.nutting.kexplore.ui.screen.detail
+
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import com.patrykandpatrick.vico.compose.cartesian.CartesianChartHost
+import com.patrykandpatrick.vico.compose.cartesian.axis.rememberBottom
+import com.patrykandpatrick.vico.compose.cartesian.axis.rememberStart
+import com.patrykandpatrick.vico.compose.cartesian.layer.rememberLineCartesianLayer
+import com.patrykandpatrick.vico.compose.cartesian.rememberCartesianChart
+import com.patrykandpatrick.vico.core.cartesian.axis.HorizontalAxis
+import com.patrykandpatrick.vico.core.cartesian.axis.VerticalAxis
+import com.patrykandpatrick.vico.compose.cartesian.rememberVicoScrollState
+import com.patrykandpatrick.vico.core.cartesian.data.CartesianChartModelProducer
+import com.patrykandpatrick.vico.core.cartesian.data.lineSeries
+import dev.nutting.kexplore.data.kubernetes.MetricsRepository
+import dev.nutting.kexplore.data.metrics.MetricsCollector
+import dev.nutting.kexplore.data.model.ResourceMetricsSnapshot
+import dev.nutting.kexplore.data.model.ResourceType
+import dev.nutting.kexplore.ui.components.EmptyContent
+
+private const val WINDOW_SLOTS = 60 // 60 slots × 5s = 5 min window
+
+@Composable
+fun MetricsTab(
+    metricsRepository: MetricsRepository?,
+    namespace: String,
+    resourceName: String,
+    resourceType: ResourceType,
+) {
+    if (metricsRepository == null) {
+        EmptyContent(message = "Not connected")
+        return
+    }
+
+    val scope = rememberCoroutineScope()
+    val collector = remember(metricsRepository, namespace, resourceName, resourceType) {
+        MetricsCollector(metricsRepository, scope)
+    }
+
+    DisposableEffect(collector) {
+        if (resourceType == ResourceType.Node) {
+            collector.startNodeMetrics(resourceName)
+        } else {
+            collector.startPodMetrics(namespace, resourceName)
+        }
+        onDispose { collector.stop() }
+    }
+
+    val snapshots by collector.snapshots.collectAsState()
+    val metricsAvailable by collector.metricsAvailable.collectAsState()
+    val nodeCapacity by collector.nodeCapacity.collectAsState()
+
+    when (metricsAvailable) {
+        null -> EmptyContent(message ="Checking metrics availability...")
+        false -> EmptyContent(message ="Metrics unavailable — install metrics-server")
+        true -> {
+            if (snapshots.isEmpty()) {
+                EmptyContent(message ="Waiting for metrics data...")
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(16.dp),
+                ) {
+                    MetricsChartCard(
+                        title = "CPU (millicores)",
+                        snapshots = snapshots,
+                        valueExtractor = { it.cpuMillicores.toDouble() },
+                        valueFormatter = { "${it.toLong()}m" },
+                        capacityValue = if (resourceType == ResourceType.Node) nodeCapacity?.cpuCapacity?.toDouble() else null,
+                    )
+
+                    Spacer(Modifier.height(16.dp))
+
+                    MetricsChartCard(
+                        title = "Memory (MiB)",
+                        snapshots = snapshots,
+                        valueExtractor = { it.memoryBytes.toDouble() / (1024 * 1024) },
+                        valueFormatter = { "${it.toLong()} MiB" },
+                        capacityValue = if (resourceType == ResourceType.Node) nodeCapacity?.memoryCapacity?.toDouble()?.div(1024 * 1024) else null,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MetricsChartCard(
+    title: String,
+    snapshots: List<ResourceMetricsSnapshot>,
+    valueExtractor: (ResourceMetricsSnapshot) -> Double,
+    valueFormatter: (Double) -> String,
+    capacityValue: Double?,
+) {
+    val modelProducer = remember { CartesianChartModelProducer() }
+
+    // Build a fixed-width series: WINDOW_SLOTS points where trailing slots
+    // without data are 0. Data is right-aligned so new points appear on the right.
+    LaunchedEffect(snapshots) {
+        if (snapshots.isNotEmpty()) {
+            val values = snapshots.map { valueExtractor(it) }
+            val padded = if (values.size < WINDOW_SLOTS) {
+                // Pad the left side with zero so the chart has a stable x-axis
+                // width and real data "scrolls in" from the right.
+                val fill = List(WINDOW_SLOTS - values.size) { 0.0 }
+                fill + values
+            } else {
+                values.takeLast(WINDOW_SLOTS)
+            }
+            modelProducer.runTransaction {
+                lineSeries { series(padded) }
+            }
+        }
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        ),
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall,
+            )
+
+            val latestValue = snapshots.lastOrNull()?.let { valueExtractor(it) }
+            if (latestValue != null) {
+                val label = if (capacityValue != null) {
+                    "${valueFormatter(latestValue)} / ${valueFormatter(capacityValue)}"
+                } else {
+                    "Current: ${valueFormatter(latestValue)}"
+                }
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            CartesianChartHost(
+                rememberCartesianChart(
+                    rememberLineCartesianLayer(),
+                    startAxis = VerticalAxis.rememberStart(),
+                    bottomAxis = HorizontalAxis.rememberBottom(),
+                ),
+                modelProducer,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(200.dp),
+                scrollState = rememberVicoScrollState(scrollEnabled = false),
+            )
+
+            Text(
+                text = "${snapshots.size} sample${if (snapshots.size != 1) "s" else ""} · polling every 5s",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+    }
+}
+
