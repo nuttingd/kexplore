@@ -3,6 +3,7 @@ package dev.nutting.kexplore.ui.screen.logs
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,8 +13,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.VerticalAlignBottom
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -40,7 +45,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import dev.nutting.kexplore.data.kubernetes.KubernetesRepository
-import dev.nutting.kexplore.ui.components.TerminalView
+import dev.nutting.kexplore.ui.components.HighlightedTerminalView
+import dev.nutting.kexplore.ui.components.MultiplexTerminalView
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -59,6 +65,12 @@ fun PodLogsScreen(
         if (repository != null) {
             viewModel.initialize(repository, namespace, podName)
         }
+    }
+
+    val scrollToLine = remember(state.currentMatchIndex, state.searchMatchIndices) {
+        if (state.currentMatchIndex >= 0 && state.currentMatchIndex < state.searchMatchIndices.size) {
+            state.searchMatchIndices[state.currentMatchIndex]
+        } else -1
     }
 
     val content = @Composable {
@@ -159,6 +171,86 @@ fun PodLogsScreen(
                         )
                     },
                 )
+
+                // Search toggle
+                FilterChip(
+                    selected = state.searchVisible,
+                    onClick = { viewModel.toggleSearch() },
+                    label = { Text("Search") },
+                    leadingIcon = {
+                        Icon(Icons.Default.Search, contentDescription = null)
+                    },
+                )
+
+                // All Containers toggle (only for multi-container pods)
+                if (state.containers.size > 1) {
+                    FilterChip(
+                        selected = state.multiplexMode,
+                        onClick = {
+                            if (repository != null) {
+                                viewModel.toggleMultiplex(repository, namespace, podName)
+                            }
+                        },
+                        label = { Text("All") },
+                        leadingIcon = {
+                            Icon(Icons.Default.SelectAll, contentDescription = null)
+                        },
+                    )
+                }
+            }
+
+            // Container filter chips in multiplex mode
+            if (state.multiplexMode && state.containers.size > 1) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    state.containers.forEach { container ->
+                        FilterChip(
+                            selected = container in state.enabledContainers,
+                            onClick = { viewModel.toggleContainerFilter(container) },
+                            label = { Text(container) },
+                        )
+                    }
+                }
+            }
+
+            // Search bar
+            AnimatedVisibility(visible = state.searchVisible) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    OutlinedTextField(
+                        value = state.searchQuery,
+                        onValueChange = { viewModel.setSearch(it) },
+                        label = { Text("Search") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                    FilterChip(
+                        selected = state.isRegex,
+                        onClick = { viewModel.toggleRegex() },
+                        label = { Text(".*") },
+                    )
+                    if (state.searchMatchIndices.isNotEmpty()) {
+                        Text(
+                            "${state.currentMatchIndex + 1}/${state.searchMatchIndices.size}",
+                            style = MaterialTheme.typography.labelSmall,
+                        )
+                    }
+                    IconButton(onClick = { viewModel.previousMatch() }) {
+                        Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Previous")
+                    }
+                    IconButton(onClick = { viewModel.nextMatch() }) {
+                        Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Next")
+                    }
+                }
             }
 
             // Error display
@@ -171,12 +263,29 @@ fun PodLogsScreen(
             }
 
             // Log output
-            TerminalView(
-                lines = state.lines,
-                autoScroll = state.isFollowing,
-                showLineNumbers = true,
-                modifier = Modifier.weight(1f),
-            )
+            if (state.multiplexMode) {
+                val filteredLines = remember(state.multiplexLines, state.enabledContainers) {
+                    state.multiplexLines.filter { it.container in state.enabledContainers }
+                }
+                MultiplexTerminalView(
+                    lines = filteredLines,
+                    containers = state.containers,
+                    autoScroll = state.isFollowing,
+                    modifier = Modifier.weight(1f),
+                )
+            } else {
+                HighlightedTerminalView(
+                    lines = state.lines,
+                    autoScroll = state.isFollowing,
+                    showLineNumbers = true,
+                    searchQuery = state.searchQuery,
+                    isRegex = state.isRegex,
+                    searchMatchIndices = state.searchMatchIndices,
+                    currentMatchIndex = state.currentMatchIndex,
+                    scrollToLine = scrollToLine,
+                    modifier = Modifier.weight(1f),
+                )
+            }
         }
     }
 

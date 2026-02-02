@@ -16,6 +16,12 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+data class MultiplexLine(
+    val container: String,
+    val text: String,
+    val receivedAt: Long = System.currentTimeMillis(),
+)
+
 data class PodLogsState(
     val containers: List<String> = emptyList(),
     val selectedContainer: String? = null,
@@ -24,6 +30,16 @@ data class PodLogsState(
     val lines: List<String> = emptyList(),
     val isStreaming: Boolean = false,
     val error: String? = null,
+    // Search state
+    val searchQuery: String = "",
+    val isRegex: Boolean = false,
+    val searchMatchIndices: List<Int> = emptyList(),
+    val currentMatchIndex: Int = -1,
+    val searchVisible: Boolean = false,
+    // Multiplex state
+    val multiplexMode: Boolean = false,
+    val enabledContainers: Set<String> = emptySet(),
+    val multiplexLines: List<MultiplexLine> = emptyList(),
 )
 
 class PodLogsViewModel : ViewModel() {
@@ -99,6 +115,167 @@ class PodLogsViewModel : ViewModel() {
         }
     }
 
+    // Search methods
+    fun toggleSearch() {
+        _state.update {
+            val newVisible = !it.searchVisible
+            if (!newVisible) {
+                it.copy(
+                    searchVisible = false,
+                    searchQuery = "",
+                    isRegex = false,
+                    searchMatchIndices = emptyList(),
+                    currentMatchIndex = -1,
+                )
+            } else {
+                it.copy(searchVisible = true)
+            }
+        }
+    }
+
+    fun setSearch(query: String) {
+        _state.update { state ->
+            val indices = computeMatchIndices(state.lines, query, state.isRegex)
+            state.copy(
+                searchQuery = query,
+                searchMatchIndices = indices,
+                currentMatchIndex = if (indices.isNotEmpty()) 0 else -1,
+                isFollowing = if (query.isNotBlank()) false else state.isFollowing,
+            )
+        }
+    }
+
+    fun toggleRegex() {
+        _state.update { state ->
+            val newIsRegex = !state.isRegex
+            val indices = computeMatchIndices(state.lines, state.searchQuery, newIsRegex)
+            state.copy(
+                isRegex = newIsRegex,
+                searchMatchIndices = indices,
+                currentMatchIndex = if (indices.isNotEmpty()) 0 else -1,
+            )
+        }
+    }
+
+    fun nextMatch() {
+        _state.update { state ->
+            if (state.searchMatchIndices.isEmpty()) return@update state
+            val next = (state.currentMatchIndex + 1) % state.searchMatchIndices.size
+            state.copy(currentMatchIndex = next)
+        }
+    }
+
+    fun previousMatch() {
+        _state.update { state ->
+            if (state.searchMatchIndices.isEmpty()) return@update state
+            val prev = if (state.currentMatchIndex <= 0) state.searchMatchIndices.size - 1
+            else state.currentMatchIndex - 1
+            state.copy(currentMatchIndex = prev)
+        }
+    }
+
+    // Multiplex methods
+    private var multiplexJobs = mutableListOf<Job>()
+    private var multiplexBatchJob: Job? = null
+    private val multiplexBuffer = Channel<MultiplexLine>(Channel.UNLIMITED)
+
+    fun toggleMultiplex(repository: KubernetesRepository, namespace: String, podName: String) {
+        val newMode = !_state.value.multiplexMode
+        _state.update {
+            it.copy(
+                multiplexMode = newMode,
+                enabledContainers = if (newMode) it.containers.toSet() else emptySet(),
+                multiplexLines = emptyList(),
+            )
+        }
+        if (newMode) {
+            startMultiplexStreaming(repository, namespace, podName)
+        } else {
+            stopMultiplex()
+            startStreaming(repository, namespace, podName)
+        }
+    }
+
+    fun toggleContainerFilter(container: String) {
+        _state.update { state ->
+            val enabled = state.enabledContainers.toMutableSet()
+            if (container in enabled) enabled.remove(container) else enabled.add(container)
+            state.copy(enabledContainers = enabled)
+        }
+    }
+
+    private fun startMultiplexStreaming(repository: KubernetesRepository, namespace: String, podName: String) {
+        stopStreaming()
+        stopMultiplex()
+        _state.update { it.copy(isStreaming = true, error = null) }
+        startMultiplexBatchConsumer()
+
+        val containers = _state.value.containers
+        val tailLines = _state.value.tailLines
+        for (container in containers) {
+            val job = viewModelScope.launch {
+                try {
+                    repository.streamPodLogs(namespace, podName, container, tailLines).collect { line ->
+                        multiplexBuffer.send(MultiplexLine(container, line))
+                    }
+                } catch (_: Exception) {
+                    // Individual container stream errors are non-fatal
+                }
+            }
+            multiplexJobs.add(job)
+        }
+    }
+
+    private fun startMultiplexBatchConsumer() {
+        multiplexBatchJob?.cancel()
+        multiplexBatchJob = viewModelScope.launch {
+            while (isActive) {
+                delay(BATCH_INTERVAL_MS)
+                val batch = mutableListOf<MultiplexLine>()
+                while (true) {
+                    val item = multiplexBuffer.tryReceive().getOrNull() ?: break
+                    batch.add(item)
+                }
+                if (batch.isNotEmpty()) {
+                    _state.update {
+                        it.copy(multiplexLines = (it.multiplexLines + batch).takeLast(MAX_LINES))
+                    }
+                }
+            }
+        }
+    }
+
+    private fun stopMultiplex() {
+        multiplexJobs.forEach { it.cancel() }
+        multiplexJobs.clear()
+        multiplexBatchJob?.cancel()
+    }
+
+    private fun computeMatchIndices(lines: List<String>, query: String, isRegex: Boolean): List<Int> {
+        if (query.isBlank()) return emptyList()
+        val pattern = try {
+            if (isRegex) Regex(query, RegexOption.IGNORE_CASE)
+            else Regex(Regex.escape(query), RegexOption.IGNORE_CASE)
+        } catch (_: Exception) {
+            return emptyList()
+        }
+        return lines.indices.filter { pattern.containsMatchIn(lines[it]) }
+    }
+
+    private fun recomputeSearchMatches() {
+        val currentState = _state.value
+        if (currentState.searchQuery.isNotBlank()) {
+            val indices = computeMatchIndices(currentState.lines, currentState.searchQuery, currentState.isRegex)
+            _state.update { state ->
+                state.copy(
+                    searchMatchIndices = indices,
+                    currentMatchIndex = if (indices.isEmpty()) -1
+                    else state.currentMatchIndex.coerceIn(0, indices.size - 1),
+                )
+            }
+        }
+    }
+
     private fun startStreaming(
         repository: KubernetesRepository,
         namespace: String,
@@ -134,6 +311,7 @@ class PodLogsViewModel : ViewModel() {
                 }
                 if (batch.isNotEmpty()) {
                     _state.update { it.copy(lines = (it.lines + batch).takeLast(MAX_LINES)) }
+                    recomputeSearchMatches()
                 }
             }
         }
@@ -149,5 +327,6 @@ class PodLogsViewModel : ViewModel() {
         super.onCleared()
         streamJob?.cancel()
         batchJob?.cancel()
+        stopMultiplex()
     }
 }

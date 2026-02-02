@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import android.util.Base64
 import java.util.UUID
 
 data class ManualConnectionState(
@@ -247,6 +248,33 @@ class ConnectionViewModel(application: Application) : AndroidViewModel(applicati
             certificateAuthorityData = state.caData.ifBlank { null },
             skipTlsVerify = state.skipTlsVerify,
         )
+    }
+
+    fun importFromQrPayload(base64Payload: String) {
+        val yamlBytes = Base64.decode(base64Payload, Base64.DEFAULT)
+        val yamlContent = String(yamlBytes, Charsets.UTF_8)
+        val kubeConfig = KubeConfigUtils.parseConfigFromString(yamlContent)
+        val contextName = kubeConfig.currentContext
+            ?: kubeConfig.contexts.firstOrNull()?.name
+            ?: throw IllegalStateException("No context found in kubeconfig")
+
+        val namedContext = kubeConfig.contexts.first { it.name == contextName }
+        val clusterName = namedContext.context?.cluster ?: ""
+        val cluster = kubeConfig.clusters.firstOrNull { it.name == clusterName }
+        val serverUrl = cluster?.cluster?.server ?: ""
+
+        val strippedConfig = stripKubeconfigToContext(kubeConfig, contextName)
+        val connection = ClusterConnection(
+            id = UUID.randomUUID().toString(),
+            name = contextName,
+            server = serverUrl,
+            authMethod = AuthMethod.Kubeconfig(
+                contextName = contextName,
+                rawKubeconfig = strippedConfig,
+            ),
+        )
+        connectionStore.saveConnection(connection)
+        connectionStore.setActiveConnectionId(connection.id)
     }
 
     private fun parseKubeconfigContexts(content: String): List<KubeconfigContext> {

@@ -18,10 +18,13 @@ import dev.nutting.kexplore.ui.screen.connection.ConnectionSetupScreen
 import dev.nutting.kexplore.ui.screen.connection.ConnectionViewModel
 import dev.nutting.kexplore.ui.screen.connection.ImportKubeconfigScreen
 import dev.nutting.kexplore.ui.screen.connection.ManualConnectionScreen
+import dev.nutting.kexplore.ui.screen.connection.QrScanScreen
 import dev.nutting.kexplore.ui.screen.detail.ResourceDetailScreen
 import dev.nutting.kexplore.ui.screen.detail.ResourceDetailViewModel
 import dev.nutting.kexplore.ui.screen.exec.PodExecScreen
 import dev.nutting.kexplore.ui.screen.exec.PodExecViewModel
+import dev.nutting.kexplore.ui.screen.events.EventStreamScreen
+import dev.nutting.kexplore.ui.screen.health.HealthDashboardScreen
 import dev.nutting.kexplore.ui.screen.logs.PodLogsScreen
 import dev.nutting.kexplore.ui.screen.main.MainScreen
 
@@ -34,6 +37,10 @@ object Routes {
     const val RESOURCE_DETAIL = "resource/{namespace}/{kind}/{name}"
     const val POD_LOGS = "logs/{namespace}/{pod}"
     const val POD_EXEC = "exec/{namespace}/{pod}/{container}"
+
+    const val HEALTH = "health"
+    const val EVENTS = "events"
+    const val QR_SCAN = "setup/qr"
 
     const val CLUSTER_SCOPE_SENTINEL = "_cluster"
 
@@ -66,6 +73,20 @@ fun AppNavGraph(
                     connectionViewModel.resetManualState()
                     navController.navigate(Routes.SETUP_MANUAL)
                 },
+                onScanQrCode = { navController.navigate(Routes.QR_SCAN) },
+            )
+        }
+
+        composable(Routes.QR_SCAN) {
+            QrScanScreen(
+                connectionViewModel = connectionViewModel,
+                onBack = { navController.popBackStack() },
+                onImported = {
+                    mainViewModel.loadConnections()
+                    navController.navigate(Routes.MAIN) {
+                        popUpTo(Routes.SETUP) { inclusive = true }
+                    }
+                },
             )
         }
 
@@ -95,10 +116,41 @@ fun AppNavGraph(
             )
         }
 
-        composable(Routes.MAIN) {
+        composable(Routes.MAIN) { backStackEntry ->
+            val actionMessage = backStackEntry.savedStateHandle
+                .get<String>("action_message")
             MainScreen(
                 viewModel = mainViewModel,
                 onManageConnections = { navController.navigate(Routes.CONNECTIONS) },
+                onNavigateToDetail = { namespace, kind, name ->
+                    navController.navigate(Routes.resourceDetail(namespace, kind, name))
+                },
+                onNavigateToHealth = { navController.navigate(Routes.HEALTH) },
+                onNavigateToEvents = { navController.navigate(Routes.EVENTS) },
+                actionMessage = actionMessage,
+                onActionMessageShown = {
+                    backStackEntry.savedStateHandle.remove<String>("action_message")
+                },
+            )
+        }
+
+        composable(Routes.EVENTS) {
+            val repository by mainViewModel.repository.collectAsState()
+            val uiState by mainViewModel.uiState.collectAsState()
+            EventStreamScreen(
+                repository = repository,
+                namespace = uiState.activeNamespace,
+                onBack = { navController.popBackStack() },
+            )
+        }
+
+        composable(Routes.HEALTH) {
+            val repository by mainViewModel.repository.collectAsState()
+            val uiState by mainViewModel.uiState.collectAsState()
+            HealthDashboardScreen(
+                repository = repository,
+                namespace = uiState.activeNamespace,
+                onBack = { navController.popBackStack() },
                 onNavigateToDetail = { namespace, kind, name ->
                     navController.navigate(Routes.resourceDetail(namespace, kind, name))
                 },
@@ -156,6 +208,15 @@ fun AppNavGraph(
                 },
                 onExec = { container ->
                     navController.navigate(Routes.podExec(namespace, name, container))
+                },
+                onDeleted = { message ->
+                    navController.previousBackStackEntry
+                        ?.savedStateHandle
+                        ?.set("action_message", message)
+                    navController.popBackStack()
+                },
+                onNavigateToRelated = { relNs, relKind, relName ->
+                    navController.navigate(Routes.resourceDetail(relNs, relKind, relName))
                 },
                 detailViewModel = detailViewModel,
             )

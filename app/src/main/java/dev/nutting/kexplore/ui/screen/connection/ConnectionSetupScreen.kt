@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -25,6 +26,7 @@ import androidx.compose.ui.unit.dp
 fun ConnectionSetupScreen(
     onImportKubeconfig: () -> Unit,
     onManualEntry: () -> Unit,
+    onScanQrCode: () -> Unit = {},
 ) {
     Column(
         modifier = Modifier
@@ -58,6 +60,19 @@ fun ConnectionSetupScreen(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("Import Kubeconfig")
+        }
+        Spacer(Modifier.height(12.dp))
+        OutlinedButton(
+            onClick = onScanQrCode,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Icon(
+                Icons.Default.QrCodeScanner,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(Modifier.size(8.dp))
+            Text("Scan QR Code")
         }
         Spacer(Modifier.height(12.dp))
         OutlinedButton(

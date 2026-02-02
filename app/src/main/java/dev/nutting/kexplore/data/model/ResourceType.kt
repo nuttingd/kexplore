@@ -71,6 +71,18 @@ enum class ResourceType(
     ResourceQuota("ResourceQuota", "ResourceQuotas", "resourcequotas", Icons.Default.Tune, ResourceCategory.Cluster),
     LimitRange("LimitRange", "LimitRanges", "limitranges", Icons.AutoMirrored.Filled.Rule, ResourceCategory.Cluster);
 
+    val canScale: Boolean
+        get() = this in setOf(Deployment, StatefulSet, ReplicaSet)
+
+    val canRestart: Boolean
+        get() = this in setOf(Deployment, StatefulSet, DaemonSet)
+
+    val canTrigger: Boolean
+        get() = this == CronJob
+
+    val isNode: Boolean
+        get() = this == Node
+
     companion object {
         fun forCategory(category: ResourceCategory): List<ResourceType> =
             entries.filter { it.category == category }

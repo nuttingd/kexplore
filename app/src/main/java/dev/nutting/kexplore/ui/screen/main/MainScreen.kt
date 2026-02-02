@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.MonitorHeart
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DrawerValue
@@ -19,9 +21,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -33,12 +39,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.nutting.kexplore.BuildConfig
+import dev.nutting.kexplore.KexploreApp
 import dev.nutting.kexplore.MainViewModel
 import dev.nutting.kexplore.R
 import dev.nutting.kexplore.data.model.ResourceType
@@ -53,13 +61,27 @@ fun MainScreen(
     viewModel: MainViewModel,
     onManageConnections: () -> Unit,
     onNavigateToDetail: (namespace: String, kind: ResourceType, name: String) -> Unit,
+    onNavigateToHealth: () -> Unit = {},
+    onNavigateToEvents: () -> Unit = {},
+    actionMessage: String? = null,
+    onActionMessageShown: () -> Unit = {},
 ) {
     val state by viewModel.uiState.collectAsState()
     val repository by viewModel.repository.collectAsState()
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val resourceListViewModel: ResourceListViewModel = viewModel()
+    val appContext = LocalContext.current.applicationContext as KexploreApp
+    val resourceCache = remember { appContext.resourceCache }
     var showAboutDialog by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(actionMessage) {
+        if (actionMessage != null) {
+            snackbarHostState.showSnackbar(actionMessage)
+            onActionMessageShown()
+        }
+    }
 
     if (showAboutDialog) {
         AboutDialog(onDismiss = { showAboutDialog = false })
@@ -86,6 +108,7 @@ fun MainScreen(
         },
     ) {
         Scaffold(
+            snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
                 TopAppBar(
                     title = {
@@ -108,6 +131,18 @@ fun MainScreen(
                         }
                     },
                     actions = {
+                        IconButton(onClick = onNavigateToHealth) {
+                            if (state.tabAnomalies.totalIssueCount > 0) {
+                                BadgedBox(badge = { Badge { Text("${state.tabAnomalies.totalIssueCount}") } }) {
+                                    Icon(Icons.Default.MonitorHeart, contentDescription = "Cluster Health")
+                                }
+                            } else {
+                                Icon(Icons.Default.MonitorHeart, contentDescription = "Cluster Health")
+                            }
+                        }
+                        IconButton(onClick = onNavigateToEvents) {
+                            Icon(Icons.Default.Notifications, contentDescription = "Events")
+                        }
                         IconButton(onClick = { showAboutDialog = true }) {
                             Icon(Icons.Outlined.Info, contentDescription = "About")
                         }
@@ -117,10 +152,23 @@ fun MainScreen(
             bottomBar = {
                 NavigationBar {
                     BottomTab.entries.forEach { tab ->
+                        val showBadge = when (tab) {
+                            BottomTab.Workloads -> state.tabAnomalies.workloadsHasIssues
+                            BottomTab.Cluster -> state.tabAnomalies.clusterHasIssues
+                            else -> false
+                        }
                         NavigationBarItem(
                             selected = state.selectedTab == tab,
                             onClick = { viewModel.selectTab(tab) },
-                            icon = { Icon(tab.icon, contentDescription = tab.label) },
+                            icon = {
+                                if (showBadge) {
+                                    BadgedBox(badge = { Badge() }) {
+                                        Icon(tab.icon, contentDescription = tab.label)
+                                    }
+                                } else {
+                                    Icon(tab.icon, contentDescription = tab.label)
+                                }
+                            },
                             label = { Text(tab.label) },
                         )
                     }
@@ -138,6 +186,8 @@ fun MainScreen(
                     onNavigateToDetail(summary.namespace, summary.kind, summary.name)
                 },
                 listViewModel = resourceListViewModel,
+                cache = resourceCache,
+                connectionId = state.activeConnectionId,
             )
         }
     }

@@ -1,5 +1,6 @@
 package dev.nutting.kexplore.ui.screen.detail
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -10,8 +11,16 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.SwapVert
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -20,16 +29,21 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
@@ -43,8 +57,13 @@ import dev.nutting.kexplore.ui.components.ContentStateHost
 import dev.nutting.kexplore.ui.components.KeyValueRow
 import dev.nutting.kexplore.ui.components.LabelChipGroup
 import dev.nutting.kexplore.ui.components.MetadataCard
+import dev.nutting.kexplore.ui.components.ScaleDialog
 import dev.nutting.kexplore.ui.components.SectionHeader
 import dev.nutting.kexplore.ui.screen.logs.PodLogsScreen
+
+private enum class ConfirmAction {
+    Delete, Restart, Trigger, Cordon, Uncordon
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -57,17 +76,30 @@ fun ResourceDetailScreen(
     onBack: () -> Unit,
     onExec: (container: String) -> Unit = {},
     onViewFullScreenLogs: () -> Unit = {},
+    onDeleted: (message: String) -> Unit = {},
+    onNavigateToRelated: (namespace: String, kind: ResourceType, name: String) -> Unit = { _, _, _ -> },
     detailViewModel: ResourceDetailViewModel,
 ) {
     val detailState by detailViewModel.state.collectAsState()
     var selectedTab by remember { mutableIntStateOf(0) }
+    var menuExpanded by remember { mutableStateOf(false) }
+    var confirmAction by remember { mutableStateOf<ConfirmAction?>(null) }
+    var showScaleDialog by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
 
     val hasMetrics = resourceType == ResourceType.Pod || resourceType == ResourceType.Node
+    val hasDependencies = resourceType in setOf(
+        ResourceType.Deployment, ResourceType.StatefulSet, ResourceType.DaemonSet,
+        ResourceType.ReplicaSet, ResourceType.Service,
+    )
     val tabs = buildList {
         add("Overview")
         add("YAML")
         if (hasMetrics) {
             add("Metrics")
+        }
+        if (hasDependencies) {
+            add("Dependencies")
         }
         if (resourceType == ResourceType.Pod) {
             add("Logs")
@@ -75,8 +107,110 @@ fun ResourceDetailScreen(
         }
     }
 
+    // Determine if node is currently cordoned
+    val isNodeCordoned = remember(detailState.detail) {
+        if (resourceType.isNode) {
+            val detail = (detailState.detail as? ContentState.Success)?.data
+            detail?.spec?.get("Unschedulable") == "true"
+        } else false
+    }
+
     LaunchedEffect(namespace, resourceType, resourceName) {
         detailViewModel.loadResource(repository, namespace, resourceType, resourceName)
+    }
+
+    // Show snackbar for action results (errors stay on detail, success delete navigates away)
+    LaunchedEffect(detailState.actionResult) {
+        when (val result = detailState.actionResult) {
+            is ActionResult.Error -> {
+                snackbarHostState.showSnackbar(result.message)
+                detailViewModel.dismissActionResult()
+            }
+            is ActionResult.Success -> {
+                // For non-delete successes, show snackbar on this screen
+                snackbarHostState.showSnackbar(result.message)
+                detailViewModel.dismissActionResult()
+            }
+            null -> {}
+        }
+    }
+
+    // Confirmation dialog
+    confirmAction?.let { action ->
+        val (title, message) = when (action) {
+            ConfirmAction.Delete -> {
+                val extra = if (resourceType == ResourceType.Namespace) {
+                    "\n\nAll resources in this namespace will be deleted."
+                } else ""
+                "Delete ${resourceType.displayName}" to
+                    "Delete ${resourceType.displayName} '$resourceName'?$extra"
+            }
+            ConfirmAction.Restart ->
+                "Restart ${resourceType.displayName}" to
+                    "Restart ${resourceType.displayName} '$resourceName'? This will trigger a rolling restart of all pods."
+            ConfirmAction.Trigger ->
+                "Trigger Job" to
+                    "Create a Job from CronJob '$resourceName'?"
+            ConfirmAction.Cordon ->
+                "Cordon Node" to
+                    "Mark node '$resourceName' as unschedulable? No new pods will be scheduled."
+            ConfirmAction.Uncordon ->
+                "Uncordon Node" to
+                    "Mark node '$resourceName' as schedulable? New pods can be scheduled."
+        }
+        AlertDialog(
+            onDismissRequest = { confirmAction = null },
+            title = { Text(title) },
+            text = { Text(message) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val currentAction = action
+                        confirmAction = null
+                        when (currentAction) {
+                            ConfirmAction.Delete -> detailViewModel.deleteResource(repository) {
+                                onDeleted("${resourceType.displayName} '$resourceName' deleted")
+                            }
+                            ConfirmAction.Restart -> detailViewModel.restartResource(repository)
+                            ConfirmAction.Trigger -> detailViewModel.triggerCronJob(repository)
+                            ConfirmAction.Cordon -> detailViewModel.cordonNode(repository)
+                            ConfirmAction.Uncordon -> detailViewModel.uncordonNode(repository)
+                        }
+                    },
+                    enabled = !detailState.actionInProgress,
+                ) {
+                    Text(
+                        if (action == ConfirmAction.Delete) "Delete" else "Confirm",
+                        color = if (action == ConfirmAction.Delete) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.primary
+                        },
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmAction = null }) {
+                    Text("Cancel")
+                }
+            },
+        )
+    }
+
+    // Scale dialog
+    if (showScaleDialog) {
+        val currentReplicas = remember(detailState.detail) {
+            val detail = (detailState.detail as? ContentState.Success)?.data
+            ResourceDetailViewModel.parseDesiredReplicas(detail?.spec?.get("Replicas")) ?: 1
+        }
+        ScaleDialog(
+            currentReplicas = currentReplicas,
+            onDismiss = { showScaleDialog = false },
+            onConfirm = { replicas ->
+                showScaleDialog = false
+                detailViewModel.scaleResource(repository, replicas)
+            },
+        )
     }
 
     Scaffold(
@@ -88,8 +222,93 @@ fun ResourceDetailScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
+                actions = {
+                    IconButton(onClick = { menuExpanded = true }) {
+                        Icon(Icons.Default.MoreVert, contentDescription = "Actions")
+                    }
+                    DropdownMenu(
+                        expanded = menuExpanded,
+                        onDismissRequest = { menuExpanded = false },
+                    ) {
+                        // Scale
+                        if (resourceType.canScale) {
+                            DropdownMenuItem(
+                                text = { Text("Scale") },
+                                onClick = {
+                                    menuExpanded = false
+                                    showScaleDialog = true
+                                },
+                                leadingIcon = { Icon(Icons.Default.SwapVert, contentDescription = null) },
+                                enabled = !detailState.actionInProgress,
+                            )
+                        }
+                        // Restart
+                        if (resourceType.canRestart) {
+                            DropdownMenuItem(
+                                text = { Text("Restart") },
+                                onClick = {
+                                    menuExpanded = false
+                                    confirmAction = ConfirmAction.Restart
+                                },
+                                leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
+                                enabled = !detailState.actionInProgress,
+                            )
+                        }
+                        // Trigger Job (CronJob)
+                        if (resourceType.canTrigger) {
+                            DropdownMenuItem(
+                                text = { Text("Trigger Job") },
+                                onClick = {
+                                    menuExpanded = false
+                                    confirmAction = ConfirmAction.Trigger
+                                },
+                                leadingIcon = { Icon(Icons.Default.PlayArrow, contentDescription = null) },
+                                enabled = !detailState.actionInProgress,
+                            )
+                        }
+                        // Cordon / Uncordon (Node)
+                        if (resourceType.isNode) {
+                            if (isNodeCordoned) {
+                                DropdownMenuItem(
+                                    text = { Text("Uncordon") },
+                                    onClick = {
+                                        menuExpanded = false
+                                        confirmAction = ConfirmAction.Uncordon
+                                    },
+                                    enabled = !detailState.actionInProgress,
+                                )
+                            } else {
+                                DropdownMenuItem(
+                                    text = { Text("Cordon") },
+                                    onClick = {
+                                        menuExpanded = false
+                                        confirmAction = ConfirmAction.Cordon
+                                    },
+                                    enabled = !detailState.actionInProgress,
+                                )
+                            }
+                        }
+                        // Delete (always available)
+                        DropdownMenuItem(
+                            text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
+                            onClick = {
+                                menuExpanded = false
+                                confirmAction = ConfirmAction.Delete
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default.Delete,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.error,
+                                )
+                            },
+                            enabled = !detailState.actionInProgress,
+                        )
+                    }
+                },
             )
         },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { padding ->
         Column(
             modifier = Modifier
@@ -119,6 +338,18 @@ fun ResourceDetailScreen(
                     resourceName = resourceName,
                     resourceType = resourceType,
                 )
+                "Dependencies" -> {
+                    LaunchedEffect(Unit) {
+                        if (detailState.dependencies == null) {
+                            detailViewModel.loadDependencies(repository)
+                        }
+                    }
+                    DependencyTab(
+                        dependencies = detailState.dependencies ?: ContentState.Loading,
+                        onNavigateToRelated = onNavigateToRelated,
+                        onRetry = { detailViewModel.loadDependencies(repository) },
+                    )
+                }
                 "Logs" -> PodLogsScreen(
                     repository = repository,
                     namespace = namespace,
@@ -285,8 +516,8 @@ private fun ExecTab(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(16.dp),
-            verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
-            horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             if (resource.containers.isEmpty()) {
                 Text("No containers found")
@@ -310,4 +541,3 @@ private fun ExecTab(
         }
     }
 }
-
