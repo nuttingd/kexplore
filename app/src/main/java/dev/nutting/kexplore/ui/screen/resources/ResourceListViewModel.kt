@@ -21,6 +21,9 @@ data class ResourceListState(
     val resources: ContentState<List<ResourceSummary>> = ContentState.Loading,
     val isRefreshing: Boolean = false,
     val lastUpdated: Long? = null,
+    val selectedItems: Set<String> = emptySet(),
+    val selectionMode: Boolean = false,
+    val bulkDeleteInProgress: Boolean = false,
 )
 
 class ResourceListViewModel : ViewModel() {
@@ -150,5 +153,67 @@ class ResourceListViewModel : ViewModel() {
 
     fun stopAutoRefresh() {
         autoRefreshJob?.cancel()
+    }
+
+    fun enterSelectionMode(key: String) {
+        _state.update {
+            it.copy(selectionMode = true, selectedItems = setOf(key))
+        }
+    }
+
+    fun toggleSelection(key: String) {
+        _state.update {
+            val newSet = if (key in it.selectedItems) {
+                it.selectedItems - key
+            } else {
+                it.selectedItems + key
+            }
+            if (newSet.isEmpty()) {
+                it.copy(selectedItems = newSet, selectionMode = false)
+            } else {
+                it.copy(selectedItems = newSet)
+            }
+        }
+    }
+
+    fun selectAll(items: List<ResourceSummary>) {
+        _state.update {
+            it.copy(selectedItems = items.map { s -> "${s.namespace}/${s.name}" }.toSet())
+        }
+    }
+
+    fun clearSelection() {
+        _state.update {
+            it.copy(selectedItems = emptySet(), selectionMode = false)
+        }
+    }
+
+    fun bulkDelete(
+        repository: KubernetesRepository?,
+        items: List<ResourceSummary>,
+        onComplete: (success: Int, fail: Int) -> Unit,
+    ) {
+        if (repository == null) return
+        viewModelScope.launch {
+            _state.update { it.copy(bulkDeleteInProgress = true) }
+            var success = 0
+            var fail = 0
+            for (item in items) {
+                try {
+                    repository.deleteResource(item.namespace, item.kind, item.name)
+                    success++
+                } catch (_: Exception) {
+                    fail++
+                }
+            }
+            _state.update {
+                it.copy(
+                    bulkDeleteInProgress = false,
+                    selectedItems = emptySet(),
+                    selectionMode = false,
+                )
+            }
+            onComplete(success, fail)
+        }
     }
 }
