@@ -4,19 +4,23 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import dev.nutting.kexplore.data.connection.ClusterConnection
+import dev.nutting.kexplore.data.kubernetes.AnomalyChecker
 import dev.nutting.kexplore.data.kubernetes.KubernetesClientFactory
 import dev.nutting.kexplore.data.kubernetes.KubernetesRepository
 import dev.nutting.kexplore.data.kubernetes.MetricsRepository
+import dev.nutting.kexplore.data.kubernetes.TabAnomalies
 import dev.nutting.kexplore.data.model.ContentState
 import dev.nutting.kexplore.ui.navigation.BottomTab
 import dev.nutting.kexplore.util.ErrorMapper
 import io.fabric8.kubernetes.client.KubernetesClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.cancellation.CancellationException
@@ -29,6 +33,7 @@ data class UiState(
     val selectedTab: BottomTab = BottomTab.Workloads,
     val isConnected: Boolean = false,
     val connectionError: String? = null,
+    val tabAnomalies: TabAnomalies = TabAnomalies(),
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -39,6 +44,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
     private var connectJob: Job? = null
+    private var anomalyJob: Job? = null
     private var client: KubernetesClient? = null
 
     private val _repository = MutableStateFlow<KubernetesRepository?>(null)
@@ -104,6 +110,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         activeNamespace = activeNs,
                     )
                 }
+                startAnomalyPolling()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -121,6 +128,29 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun selectNamespace(namespace: String) {
         _uiState.update { it.copy(activeNamespace = namespace) }
         connectionStore.setActiveNamespace(namespace)
+        startAnomalyPolling()
+    }
+
+    private fun startAnomalyPolling() {
+        anomalyJob?.cancel()
+        val repo = _repository.value ?: return
+        val checker = AnomalyChecker(repo)
+        anomalyJob = viewModelScope.launch {
+            while (isActive) {
+                try {
+                    val namespace = _uiState.value.activeNamespace
+                    val anomalies = withContext(Dispatchers.IO) {
+                        checker.check(namespace)
+                    }
+                    _uiState.update { it.copy(tabAnomalies = anomalies) }
+                } catch (_: CancellationException) {
+                    throw CancellationException()
+                } catch (_: Exception) {
+                    // Ignore errors in background polling
+                }
+                delay(60_000)
+            }
+        }
     }
 
     fun selectTab(tab: BottomTab) {
@@ -134,6 +164,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     override fun onCleared() {
         super.onCleared()
+        anomalyJob?.cancel()
         client?.close()
     }
 }

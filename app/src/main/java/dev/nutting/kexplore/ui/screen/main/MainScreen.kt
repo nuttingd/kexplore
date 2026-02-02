@@ -19,6 +19,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
@@ -131,10 +133,23 @@ fun MainScreen(
             bottomBar = {
                 NavigationBar {
                     BottomTab.entries.forEach { tab ->
+                        val showBadge = when (tab) {
+                            BottomTab.Workloads -> state.tabAnomalies.workloadsHasIssues
+                            BottomTab.Cluster -> state.tabAnomalies.clusterHasIssues
+                            else -> false
+                        }
                         NavigationBarItem(
                             selected = state.selectedTab == tab,
                             onClick = { viewModel.selectTab(tab) },
-                            icon = { Icon(tab.icon, contentDescription = tab.label) },
+                            icon = {
+                                if (showBadge) {
+                                    BadgedBox(badge = { Badge() }) {
+                                        Icon(tab.icon, contentDescription = tab.label)
+                                    }
+                                } else {
+                                    Icon(tab.icon, contentDescription = tab.label)
+                                }
+                            },
                             label = { Text(tab.label) },
                         )
                     }

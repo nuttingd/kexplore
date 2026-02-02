@@ -21,7 +21,7 @@ import java.io.OutputStream
 import java.io.PipedInputStream
 import java.io.PipedOutputStream
 
-class KubernetesRepository(private val client: KubernetesClient) {
+open class KubernetesRepository(private val client: KubernetesClient) {
 
     /**
      * Lists items from a namespaced operation, respecting the all-namespaces vs single-namespace scope.
@@ -35,7 +35,7 @@ class KubernetesRepository(private val client: KubernetesClient) {
         client.namespaces().list().items.map { it.metadata.name }
     }
 
-    suspend fun getResources(namespace: String, type: ResourceType): List<ResourceSummary> =
+    open suspend fun getResources(namespace: String, type: ResourceType): List<ResourceSummary> =
         withContext(Dispatchers.IO) {
             val items: List<HasMetadata> = when (type) {
                 ResourceType.Pod -> client.pods().listScoped(namespace)
