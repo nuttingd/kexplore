@@ -4,6 +4,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.kotlin.plugin.serialization")
+    id("com.google.devtools.ksp")
 }
 
 val keystorePropertiesFile = rootProject.file("keystore.properties")
@@ -95,6 +96,10 @@ java {
     }
 }
 
+ksp {
+    arg("showkase_in_compose_preview_metadata", "true")
+}
+
 kotlin {
     compilerOptions {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
@@ -149,6 +154,10 @@ dependencies {
     testImplementation("org.robolectric:robolectric:4.14.1")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
+
+    // Showkase
+    implementation("com.airbnb.android:showkase:1.0.2")
+    ksp("com.airbnb.android:showkase-processor:1.0.2")
 
     androidTestImplementation(composeBom)
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
