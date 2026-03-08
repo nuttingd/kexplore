@@ -25,6 +25,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.tooling.preview.Preview
 import dev.nutting.kexplore.data.model.ResourceSummary
+import dev.nutting.kexplore.data.model.ResourceType
+import dev.nutting.kexplore.data.model.ResourceStatus
 
 @Preview
 @Composable

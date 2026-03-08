@@ -98,6 +98,7 @@ java {
 
 ksp {
     arg("showkase_in_compose_preview_metadata", "true")
+    arg("skipPrivatePreviews", "true")
 }
 
 kotlin {
