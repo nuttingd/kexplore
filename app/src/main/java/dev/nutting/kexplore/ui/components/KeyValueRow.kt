@@ -8,6 +8,23 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.tooling.preview.Preview
+
+@Preview
+@Composable
+private fun KeyValueRowPreview() {
+    MaterialTheme {
+        KeyValueRow(label = "Name", value = "my-deployment-abc123")
+    }
+}
+
+@Preview
+@Composable
+private fun InlineKeyValueRowPreview() {
+    MaterialTheme {
+        InlineKeyValueRow(label = "Namespace", value = "default")
+    }
+}
 
 /**
  * Displays a key-value pair with the label above the value in a vertical layout.

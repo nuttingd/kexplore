@@ -21,7 +21,32 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.tooling.preview.Preview
 import dev.nutting.kexplore.data.model.ContentState
+
+@Preview
+@Composable
+private fun LoadingContentPreview() {
+    MaterialTheme {
+        LoadingContent(message = "Loading resources...")
+    }
+}
+
+@Preview
+@Composable
+private fun ErrorContentPreview() {
+    MaterialTheme {
+        ErrorContent(message = "Failed to connect to cluster", onRetry = {})
+    }
+}
+
+@Preview
+@Composable
+private fun EmptyContentPreview() {
+    MaterialTheme {
+        EmptyContent(message = "No pods found")
+    }
+}
 
 @Composable
 fun <T> ContentStateHost(

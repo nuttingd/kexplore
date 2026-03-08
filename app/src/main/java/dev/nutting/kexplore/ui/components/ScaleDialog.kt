@@ -11,6 +11,47 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.tooling.preview.Preview
+
+@Preview
+@Composable
+private fun ScaleDialogPreview() {
+    var text by remember { mutableStateOf("3") }
+    val parsed = text.toIntOrNull()
+    val isValid = parsed != null && parsed in 0..100
+
+    AlertDialog(
+        onDismissRequest = {},
+        title = { Text("Scale Replicas") },
+        text = {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it },
+                label = { Text("Replicas") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                isError = text.isNotEmpty() && !isValid,
+                supportingText = if (text.isNotEmpty() && !isValid) {
+                    { Text("Enter a number between 0 and 100") }
+                } else null,
+                singleLine = true,
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { parsed?.let {} },
+                enabled = isValid,
+            ) {
+                Text("Scale")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = {}) {
+                Text("Cancel")
+            }
+        },
+    )
+}
 
 @Composable
 fun ScaleDialog(
