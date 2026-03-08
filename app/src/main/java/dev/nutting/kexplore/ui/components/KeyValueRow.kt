@@ -12,7 +12,7 @@ import androidx.compose.ui.tooling.preview.Preview
 
 @Preview
 @Composable
-private fun KeyValueRowPreview() {
+internal fun KeyValueRowPreview() {
     MaterialTheme {
         KeyValueRow(label = "Name", value = "my-deployment-abc123")
     }
@@ -20,7 +20,7 @@ private fun KeyValueRowPreview() {
 
 @Preview
 @Composable
-private fun InlineKeyValueRowPreview() {
+internal fun InlineKeyValueRowPreview() {
     MaterialTheme {
         InlineKeyValueRow(label = "Namespace", value = "default")
     }

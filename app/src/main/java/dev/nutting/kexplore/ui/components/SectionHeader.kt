@@ -12,7 +12,7 @@ import androidx.compose.ui.tooling.preview.Preview
 
 @Preview
 @Composable
-private fun SectionHeaderPreview() {
+internal fun SectionHeaderPreview() {
     MaterialTheme {
         SectionHeader(title = "Container Details")
     }
@@ -20,7 +20,7 @@ private fun SectionHeaderPreview() {
 
 @Preview
 @Composable
-private fun SectionHeaderNoDividerPreview() {
+internal fun SectionHeaderNoDividerPreview() {
     MaterialTheme {
         SectionHeader(title = "No Divider", showDivider = false)
     }

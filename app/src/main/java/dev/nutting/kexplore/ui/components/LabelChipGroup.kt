@@ -14,7 +14,7 @@ import androidx.compose.ui.tooling.preview.Preview
 
 @Preview
 @Composable
-private fun LabelChipGroupPreview() {
+internal fun LabelChipGroupPreview() {
     MaterialTheme {
         LabelChipGroup(
             labels = mapOf(

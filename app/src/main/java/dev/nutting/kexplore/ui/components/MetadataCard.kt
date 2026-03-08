@@ -20,7 +20,7 @@ import dev.nutting.kexplore.data.model.ResourceStatus
 
 @Preview
 @Composable
-private fun MetadataCardPreview() {
+internal fun MetadataCardPreview() {
     MaterialTheme {
         MetadataCard(
             name = "my-deployment",

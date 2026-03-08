@@ -26,7 +26,7 @@ import dev.nutting.kexplore.data.model.ContentState
 
 @Preview
 @Composable
-private fun LoadingContentPreview() {
+internal fun LoadingContentPreview() {
     MaterialTheme {
         LoadingContent(message = "Loading resources...")
     }
@@ -34,7 +34,7 @@ private fun LoadingContentPreview() {
 
 @Preview
 @Composable
-private fun ErrorContentPreview() {
+internal fun ErrorContentPreview() {
     MaterialTheme {
         ErrorContent(message = "Failed to connect to cluster", onRetry = {})
     }
@@ -42,7 +42,7 @@ private fun ErrorContentPreview() {
 
 @Preview
 @Composable
-private fun EmptyContentPreview() {
+internal fun EmptyContentPreview() {
     MaterialTheme {
         EmptyContent(message = "No pods found")
     }

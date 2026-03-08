@@ -20,7 +20,7 @@ import dev.nutting.kexplore.ui.theme.StatusColors
 
 @Preview
 @Composable
-private fun StatusChipPreview() {
+internal fun StatusChipPreview() {
     MaterialTheme {
         StatusChip(status = ResourceStatus.Running)
     }

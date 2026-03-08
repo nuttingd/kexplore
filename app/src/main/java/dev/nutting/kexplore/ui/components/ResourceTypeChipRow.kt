@@ -16,7 +16,7 @@ import dev.nutting.kexplore.data.model.ResourceType
 
 @Preview
 @Composable
-private fun ResourceTypeChipRowPreview() {
+internal fun ResourceTypeChipRowPreview() {
     MaterialTheme {
         ResourceTypeChipRow(
             types = listOf(ResourceType.Pod, ResourceType.Deployment, ResourceType.Service, ResourceType.Ingress),

@@ -30,7 +30,7 @@ import dev.nutting.kexplore.data.model.ResourceStatus
 
 @Preview
 @Composable
-private fun ResourceListItemPreview() {
+internal fun ResourceListItemPreview() {
     MaterialTheme {
         ResourceListItem(
             summary = ResourceSummary(
@@ -49,7 +49,7 @@ private fun ResourceListItemPreview() {
 
 @Preview
 @Composable
-private fun ResourceListItemFailedPreview() {
+internal fun ResourceListItemFailedPreview() {
     MaterialTheme {
         ResourceListItem(
             summary = ResourceSummary(

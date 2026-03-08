@@ -23,7 +23,7 @@ import dev.nutting.kexplore.data.model.ResourceStatus
 
 @Preview
 @Composable
-private fun SearchFilterBarPreview() {
+internal fun SearchFilterBarPreview() {
     MaterialTheme {
         SearchFilterBar(
             query = "",
@@ -34,7 +34,7 @@ private fun SearchFilterBarPreview() {
 
 @Preview
 @Composable
-private fun SearchFilterBarWithFiltersPreview() {
+internal fun SearchFilterBarWithFiltersPreview() {
     MaterialTheme {
         SearchFilterBar(
             query = "my-resource",
