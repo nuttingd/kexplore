@@ -61,3 +61,37 @@ Single-module Android app (`app/`) using MVVM with Jetpack Compose.
 ## Release Pipeline
 
 Uses semantic-release on the `main` branch with Conventional Commits. CI (GitHub Actions) builds a signed APK and creates a GitHub release. Version codes follow `MAJOR*10000 + MINOR*100 + PATCH` (managed by `scripts/set-version.sh`).
+
+## UI Component Previews with Showkase
+
+This project uses [Showkase](https://github.com/airbnb/Showkase) for organizing and browsing UI component previews.
+
+### Adding Previews
+
+Add `@Preview` annotations to self-contained composables:
+
+```kotlin
+@Preview
+@Composable
+private fun MyComponentPreview() {
+    MaterialTheme {
+        MyComponent(param = "value")
+    }
+}
+```
+
+### Viewing Previews
+
+Run the app and launch the Showkase browser from the device launcher. It's registered as a second launcher activity called "Kexplore UI Browser".
+
+Alternatively, you can launch it programmatically:
+
+```kotlin
+startActivity(Intent(this, ShowkaseBrowserActivity::class.java))
+```
+
+### Configuration
+
+- Showkase is configured to work with `@Preview` annotations via `showkase_in_compose_preview_metadata=true`
+- The root is defined in `KexploreApp.kt` with `@ShowkaseRoot`
+- Browse previews at: Launch "Kexplore UI Browser" from app launcher

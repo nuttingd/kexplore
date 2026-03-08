@@ -22,7 +22,51 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.tooling.preview.Preview
 import dev.nutting.kexplore.data.model.ResourceSummary
+import dev.nutting.kexplore.data.model.ResourceType
+import dev.nutting.kexplore.data.model.ResourceStatus
+
+@Preview
+@Composable
+internal fun ResourceListItemPreview() {
+    MaterialTheme {
+        ResourceListItem(
+            summary = ResourceSummary(
+                name = "my-deployment-abc123",
+                namespace = "default",
+                kind = ResourceType.Deployment,
+                status = ResourceStatus.Running,
+                age = "2d",
+                labels = emptyMap(),
+                readyCount = "3/3",
+            ),
+            onClick = {},
+        )
+    }
+}
+
+@Preview
+@Composable
+internal fun ResourceListItemFailedPreview() {
+    MaterialTheme {
+        ResourceListItem(
+            summary = ResourceSummary(
+                name = "failing-pod-xyz",
+                namespace = "default",
+                kind = ResourceType.Pod,
+                status = ResourceStatus.Failed,
+                age = "1h",
+                labels = emptyMap(),
+                restarts = 5,
+            ),
+            onClick = {},
+            onDelete = {},
+            onScale = {},
+        )
+    }
+}
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable

@@ -15,7 +15,22 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.tooling.preview.Preview
 import dev.nutting.kexplore.data.model.ResourceStatus
+
+@Preview
+@Composable
+internal fun MetadataCardPreview() {
+    MaterialTheme {
+        MetadataCard(
+            name = "my-deployment",
+            namespace = "default",
+            uid = "abc123-def456-ghi789",
+            creationTimestamp = "2024-01-15T10:30:00Z",
+            status = ResourceStatus.Running,
+        )
+    }
+}
 
 @Composable
 fun MetadataCard(

@@ -300,22 +300,29 @@ open class KubernetesRepository(private val client: KubernetesClient) {
         // Poll for new lines using sinceTime to avoid duplicates
         while (true) {
             delay(pollIntervalMs)
-            val newLog = if (lastTimestamp != null) {
-                podOp.usingTimestamps().sinceTime(lastTimestamp).getLog() ?: ""
-            } else {
-                podOp.usingTimestamps().sinceSeconds(3).getLog() ?: ""
-            }
-            val newLines = newLog.lines().filter { it.isNotEmpty() }
-            for (raw in newLines) {
-                val spaceIdx = raw.indexOf(' ')
-                if (spaceIdx > 0) {
-                    val ts = raw.substring(0, spaceIdx)
-                    if (ts == lastTimestamp) continue
-                    lastTimestamp = ts
-                    emit(raw.substring(spaceIdx + 1))
+            try {
+                val newLog = if (lastTimestamp != null) {
+                    podOp.usingTimestamps().sinceTime(lastTimestamp).getLog() ?: ""
                 } else {
-                    emit(raw)
+                    podOp.usingTimestamps().sinceSeconds(3).getLog() ?: ""
                 }
+                val newLines = newLog.lines().filter { it.isNotEmpty() }
+                for (raw in newLines) {
+                    val spaceIdx = raw.indexOf(' ')
+                    if (spaceIdx > 0) {
+                        val ts = raw.substring(0, spaceIdx)
+                        if (ts == lastTimestamp) continue
+                        lastTimestamp = ts
+                        emit(raw.substring(spaceIdx + 1))
+                    } else {
+                        emit(raw)
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // Skip failed poll iteration
+                continue
             }
         }
     }.flowOn(Dispatchers.IO)

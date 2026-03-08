@@ -60,35 +60,37 @@ class PodExecViewModel : ViewModel() {
 
                 // Read stdout in background
                 launch(Dispatchers.IO) {
-                    val reader = execSession.stdout.bufferedReader()
-                    val charBuf = CharArray(4096)
-                    while (isActive) {
-                        val count = try {
-                            reader.read(charBuf)
-                        } catch (_: Exception) {
-                            -1
+                    execSession.stdout.bufferedReader().use { reader ->
+                        val charBuf = CharArray(4096)
+                        while (isActive) {
+                            val count = try {
+                                reader.read(charBuf)
+                            } catch (_: Exception) {
+                                -1
+                            }
+                            if (count == -1) break
+                            val text = stripAnsi(String(charBuf, 0, count))
+                            val newLines = text.split("\n")
+                            _state.update { it.copy(lines = (it.lines + newLines).takeLast(MAX_LINES)) }
                         }
-                        if (count == -1) break
-                        val text = stripAnsi(String(charBuf, 0, count))
-                        val newLines = text.split("\n")
-                        _state.update { it.copy(lines = (it.lines + newLines).takeLast(MAX_LINES)) }
                     }
                 }
 
                 // Read stderr in background
                 launch(Dispatchers.IO) {
-                    val reader = execSession.stderr.bufferedReader()
-                    val charBuf = CharArray(4096)
-                    while (isActive) {
-                        val count = try {
-                            reader.read(charBuf)
-                        } catch (_: Exception) {
-                            -1
+                    execSession.stderr.bufferedReader().use { reader ->
+                        val charBuf = CharArray(4096)
+                        while (isActive) {
+                            val count = try {
+                                reader.read(charBuf)
+                            } catch (_: Exception) {
+                                -1
+                            }
+                            if (count == -1) break
+                            val text = stripAnsi(String(charBuf, 0, count))
+                            val newLines = text.split("\n")
+                            _state.update { it.copy(lines = (it.lines + newLines).takeLast(MAX_LINES)) }
                         }
-                        if (count == -1) break
-                        val text = stripAnsi(String(charBuf, 0, count))
-                        val newLines = text.split("\n")
-                        _state.update { it.copy(lines = (it.lines + newLines).takeLast(MAX_LINES)) }
                     }
                 }
             } catch (e: CancellationException) {

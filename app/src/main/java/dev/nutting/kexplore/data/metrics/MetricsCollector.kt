@@ -34,10 +34,10 @@ class MetricsCollector(
 
     fun startPodMetrics(namespace: String, podName: String) {
         stop()
-        clearBuffer()
-        _metricsAvailable.value = null
 
         pollingJob = scope.launch {
+            clearBuffer()
+
             val available = metricsRepository.isMetricsAvailable()
             _metricsAvailable.value = available
             if (!available) return@launch
@@ -58,10 +58,10 @@ class MetricsCollector(
 
     fun startNodeMetrics(nodeName: String) {
         stop()
-        clearBuffer()
-        _metricsAvailable.value = null
 
         pollingJob = scope.launch {
+            clearBuffer()
+
             val available = metricsRepository.isMetricsAvailable()
             _metricsAvailable.value = available
             if (!available) return@launch
@@ -86,11 +86,12 @@ class MetricsCollector(
         pollingJob = null
     }
 
-    private fun clearBuffer() {
-        // Use runBlocking-free clear since stop() already cancelled the polling job
-        buffer.clear()
-        _snapshots.value = emptyList()
-        _metricsAvailable.value = null
+    private suspend fun clearBuffer() {
+        bufferMutex.withLock {
+            buffer.clear()
+            _snapshots.value = emptyList()
+            _metricsAvailable.value = null
+        }
     }
 
     private suspend fun addSnapshot(snapshot: ResourceMetricsSnapshot) {

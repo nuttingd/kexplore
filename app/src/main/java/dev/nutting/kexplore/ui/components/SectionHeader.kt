@@ -8,6 +8,23 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.tooling.preview.Preview
+
+@Preview
+@Composable
+internal fun SectionHeaderPreview() {
+    MaterialTheme {
+        SectionHeader(title = "Container Details")
+    }
+}
+
+@Preview
+@Composable
+internal fun SectionHeaderNoDividerPreview() {
+    MaterialTheme {
+        SectionHeader(title = "No Divider", showDivider = false)
+    }
+}
 
 @Composable
 fun SectionHeader(

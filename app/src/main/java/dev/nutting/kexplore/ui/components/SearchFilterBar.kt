@@ -17,7 +17,35 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.tooling.preview.Preview
 import dev.nutting.kexplore.data.model.ResourceStatus
+
+@Preview
+@Composable
+internal fun SearchFilterBarPreview() {
+    MaterialTheme {
+        SearchFilterBar(
+            query = "",
+            onQueryChange = {},
+        )
+    }
+}
+
+@Preview
+@Composable
+internal fun SearchFilterBarWithFiltersPreview() {
+    MaterialTheme {
+        SearchFilterBar(
+            query = "my-resource",
+            onQueryChange = {},
+            statusFilters = setOf(ResourceStatus.Running, ResourceStatus.Failed),
+            onStatusFilterToggle = {},
+            labelFilter = "app=test",
+            onLabelFilterChange = {},
+        )
+    }
+}
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable

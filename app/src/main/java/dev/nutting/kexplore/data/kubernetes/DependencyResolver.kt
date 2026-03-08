@@ -211,7 +211,7 @@ class DependencyResolver(private val repository: KubernetesRepository) {
         val ready = deployment.status?.readyReplicas ?: 0
         val desired = deployment.spec?.replicas ?: 0
         return when {
-            desired == 0 -> ResourceStatus.Running
+            desired == 0 -> ResourceStatus.Pending
             ready >= desired -> ResourceStatus.Running
             ready > 0 -> ResourceStatus.Pending
             else -> ResourceStatus.Failed

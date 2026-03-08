@@ -105,4 +105,10 @@ class HealthDashboardViewModel : ViewModel() {
     fun stopAutoRefresh() {
         autoRefreshJob?.cancel()
     }
+
+    override fun onCleared() {
+        super.onCleared()
+        loadJob?.cancel()
+        autoRefreshJob?.cancel()
+    }
 }

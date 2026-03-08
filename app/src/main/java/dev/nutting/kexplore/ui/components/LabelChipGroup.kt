@@ -10,6 +10,21 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.tooling.preview.Preview
+
+@Preview
+@Composable
+internal fun LabelChipGroupPreview() {
+    MaterialTheme {
+        LabelChipGroup(
+            labels = mapOf(
+                "app" to "nginx",
+                "version" to "v1",
+                "environment" to "production",
+            ),
+        )
+    }
+}
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
