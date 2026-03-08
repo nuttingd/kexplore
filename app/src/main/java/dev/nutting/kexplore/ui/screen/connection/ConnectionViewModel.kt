@@ -250,7 +250,7 @@ class ConnectionViewModel(application: Application) : AndroidViewModel(applicati
         )
     }
 
-    fun importFromQrPayload(base64Payload: String) {
+    suspend fun importFromQrPayload(base64Payload: String) = withContext(Dispatchers.IO) {
         val yamlBytes = Base64.decode(base64Payload, Base64.DEFAULT)
         val yamlContent = String(yamlBytes, Charsets.UTF_8)
         val kubeConfig = KubeConfigUtils.parseConfigFromString(yamlContent)

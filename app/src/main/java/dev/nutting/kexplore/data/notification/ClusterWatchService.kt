@@ -29,6 +29,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.io.Closeable
+import kotlin.random.Random
 
 class ClusterWatchService : Service() {
 
@@ -36,6 +37,7 @@ class ClusterWatchService : Service() {
     private var client: KubernetesClient? = null
     private val watches = mutableListOf<Closeable>()
     private var reconnectJob: Job? = null
+    private var reconnectAttempt = 0
     private var connectionId: String? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -137,6 +139,7 @@ class ClusterWatchService : Service() {
                 })
                 watches.add(watch)
             }
+            reconnectAttempt = 0
         } catch (_: Exception) {
             scheduleReconnect(app)
         }
@@ -224,8 +227,10 @@ class ClusterWatchService : Service() {
 
     private fun scheduleReconnect(app: KexploreApp) {
         reconnectJob?.cancel()
+        val delayMs = minOf(30_000L * (1 shl reconnectAttempt), 300_000L) + Random.nextLong(5_000)
+        reconnectAttempt++
         reconnectJob = scope.launch {
-            delay(30_000) // Exponential backoff could be added
+            delay(delayMs)
             startWatching(app)
         }
     }

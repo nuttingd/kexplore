@@ -59,9 +59,10 @@ class EventStreamViewModel : ViewModel() {
     fun start(repository: KubernetesRepository, namespace: String?) {
         watchJob?.cancel()
         _state.update { it.copy(isStreaming = true, error = null, events = emptyList()) }
-        startBatchConsumer()
 
         watchJob = viewModelScope.launch {
+            startBatchConsumer()
+
             try {
                 repository.watchEvents(namespace).collect { update ->
                     val event = update.event

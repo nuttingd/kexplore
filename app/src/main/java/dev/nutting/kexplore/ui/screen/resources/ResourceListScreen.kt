@@ -97,13 +97,9 @@ fun ResourceListScreen(
         listViewModel.clearSelection()
     }
 
-    // Load resources on type/namespace/connection change
+    // Load resources and start auto-refresh on type/namespace/connection change
     LaunchedEffect(selectedType, effectiveNamespace, isConnected, repository) {
         listViewModel.loadResources(repository, effectiveNamespace, selectedType, isConnected, connectionError, cache = cache, connectionId = connectionId)
-    }
-
-    // Auto-refresh while screen is visible
-    LaunchedEffect(selectedType, effectiveNamespace, isConnected, repository) {
         listViewModel.startAutoRefresh(repository, effectiveNamespace, selectedType, isConnected, connectionError, cache = cache, connectionId = connectionId)
     }
 

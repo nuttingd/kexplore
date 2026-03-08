@@ -55,6 +55,11 @@ class KexploreApp : Application() {
         )
     }
 
+    override fun onTerminate() {
+        portForwardManager.close()
+        super.onTerminate()
+    }
+
     private fun scheduleWidgetRefresh() {
         val request = PeriodicWorkRequestBuilder<WidgetRefreshWorker>(
             15, TimeUnit.MINUTES,

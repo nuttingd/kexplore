@@ -150,11 +150,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun startAnomalyPolling() {
         anomalyJob?.cancel()
-        val repo = _repository.value ?: return
-        val checker = AnomalyChecker(repo)
         anomalyJob = viewModelScope.launch {
             while (isActive) {
+                val repo = _repository.value
+                if (repo == null) {
+                    delay(60_000)
+                    continue
+                }
                 try {
+                    val checker = AnomalyChecker(repo)
                     val namespace = _uiState.value.activeNamespace
                     val anomalies = withContext(Dispatchers.IO) {
                         checker.check(namespace)
