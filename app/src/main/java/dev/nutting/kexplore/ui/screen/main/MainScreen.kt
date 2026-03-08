@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -31,6 +32,7 @@ import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -61,6 +63,7 @@ import dev.nutting.kexplore.ui.screen.crd.CrdListContent
 import dev.nutting.kexplore.ui.screen.crd.CrdListViewModel
 import dev.nutting.kexplore.ui.screen.resources.ResourceListScreen
 import dev.nutting.kexplore.ui.screen.resources.ResourceListViewModel
+import dev.nutting.kexplore.ui.theme.getColor
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -73,6 +76,7 @@ fun MainScreen(
     onNavigateToEvents: () -> Unit = {},
     onNavigateToCrdInstances: (crdName: String) -> Unit = {},
     onNavigateToMonitoring: () -> Unit = {},
+    onNavigateToDisplay: () -> Unit = {},
     onNavigateToPortForward: () -> Unit = {},
     actionMessage: String? = null,
     onActionMessageShown: () -> Unit = {},
@@ -119,6 +123,10 @@ fun MainScreen(
                 onNavigateToMonitoring = {
                     scope.launch { drawerState.close() }
                     onNavigateToMonitoring()
+                },
+                onNavigateToDisplay = {
+                    scope.launch { drawerState.close() }
+                    onNavigateToDisplay()
                 },
             )
         },
@@ -184,6 +192,7 @@ fun MainScreen(
                 )
             },
             bottomBar = {
+                val isDarkTheme = isSystemInDarkTheme()
                 NavigationBar {
                     BottomTab.entries.forEach { tab ->
                         val showBadge = when (tab) {
@@ -191,6 +200,8 @@ fun MainScreen(
                             BottomTab.Cluster -> state.tabAnomalies.clusterHasIssues
                             else -> false
                         }
+                        val categoryColor = tab.category?.getColor(isDarkTheme)
+                        
                         NavigationBarItem(
                             selected = state.selectedTab == tab,
                             onClick = { viewModel.selectTab(tab) },
@@ -204,6 +215,10 @@ fun MainScreen(
                                 }
                             },
                             label = { Text(tab.label) },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = categoryColor,
+                                selectedTextColor = categoryColor,
+                            ),
                         )
                     }
                 }

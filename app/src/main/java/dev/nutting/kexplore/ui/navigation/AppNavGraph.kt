@@ -35,6 +35,7 @@ import dev.nutting.kexplore.ui.screen.logs.PodLogsScreen
 import dev.nutting.kexplore.ui.screen.main.MainScreen
 import dev.nutting.kexplore.ui.screen.portforward.PortForwardScreen
 import dev.nutting.kexplore.ui.screen.portforward.PortForwardViewModel
+import dev.nutting.kexplore.ui.screen.settings.DisplaySettingsScreen
 import dev.nutting.kexplore.ui.screen.settings.MonitoringSettingsScreen
 
 object Routes {
@@ -52,6 +53,7 @@ object Routes {
     const val QR_SCAN = "setup/qr"
 
     const val MONITORING_SETTINGS = "settings/monitoring"
+    const val DISPLAY_SETTINGS = "settings/display"
     const val PORT_FORWARD = "portforward?pod={pod}&service={service}"
 
     const val CRD_LIST = "crds"
@@ -161,6 +163,7 @@ fun AppNavGraph(
                     navController.navigate(Routes.crdInstances(crdName))
                 },
                 onNavigateToMonitoring = { navController.navigate(Routes.MONITORING_SETTINGS) },
+                onNavigateToDisplay = { navController.navigate(Routes.DISPLAY_SETTINGS) },
                 onNavigateToPortForward = { navController.navigate(Routes.portForward()) },
                 actionMessage = actionMessage,
                 onActionMessageShown = {
@@ -343,6 +346,12 @@ fun AppNavGraph(
 
         composable(Routes.MONITORING_SETTINGS) {
             MonitoringSettingsScreen(
+                onBack = { navController.popBackStack() },
+            )
+        }
+
+        composable(Routes.DISPLAY_SETTINGS) {
+            DisplaySettingsScreen(
                 onBack = { navController.popBackStack() },
             )
         }

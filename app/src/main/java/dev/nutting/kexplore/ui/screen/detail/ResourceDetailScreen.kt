@@ -398,6 +398,7 @@ private fun OverviewTab(
                 uid = resource.uid,
                 creationTimestamp = resource.creationTimestamp,
                 status = resource.status,
+                resourceType = resourceType,
             )
 
             if (resource.labels.isNotEmpty()) {

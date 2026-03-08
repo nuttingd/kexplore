@@ -2,6 +2,7 @@ package dev.nutting.kexplore.ui.components
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PlayArrow
@@ -27,6 +28,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import dev.nutting.kexplore.data.model.ResourceSummary
 import dev.nutting.kexplore.data.model.ResourceType
 import dev.nutting.kexplore.data.model.ResourceStatus
+import dev.nutting.kexplore.ui.theme.KexploreTextStyles
+import dev.nutting.kexplore.ui.theme.getColor
 
 @Preview
 @Composable
@@ -85,6 +88,7 @@ fun ResourceListItem(
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     val hasActions = onDelete != null || onScale != null || onRestart != null || onTrigger != null
+    val isDarkTheme = isSystemInDarkTheme()
 
     val containerColor = if (isSelected) {
         MaterialTheme.colorScheme.primaryContainer
@@ -100,7 +104,10 @@ fun ResourceListItem(
             summary.readyCount?.let { parts.add("Ready: $it") }
             summary.restarts?.let { if (it > 0) parts.add("Restarts: $it") }
             parts.add(summary.age)
-            Text(parts.joinToString(" | "))
+            Text(
+                text = parts.joinToString(" | "),
+                style = KexploreTextStyles.timestamp,
+            )
         },
         leadingContent = {
             if (selectionMode) {
@@ -112,7 +119,7 @@ fun ResourceListItem(
                 Icon(
                     imageVector = summary.kind.icon,
                     contentDescription = summary.kind.displayName,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    tint = summary.kind.category.getColor(isDarkTheme),
                 )
             }
         },

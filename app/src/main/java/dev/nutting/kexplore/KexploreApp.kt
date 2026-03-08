@@ -10,6 +10,7 @@ import dev.nutting.kexplore.data.notification.ClusterMonitorWorker
 import dev.nutting.kexplore.data.notification.MonitoringPreferences
 import dev.nutting.kexplore.data.notification.NotificationHelper
 import dev.nutting.kexplore.data.portforward.PortForwardManager
+import dev.nutting.kexplore.data.preferences.DisplayPreferences
 import dev.nutting.kexplore.widget.WidgetRefreshWorker
 import com.airbnb.android.showkase.annotation.ShowkaseRoot
 import com.airbnb.android.showkase.annotation.ShowkaseRootModule
@@ -29,6 +30,9 @@ class KexploreApp : Application() {
     lateinit var monitoringPreferences: MonitoringPreferences
         private set
 
+    lateinit var displayPreferences: DisplayPreferences
+        private set
+
     lateinit var portForwardManager: PortForwardManager
         private set
 
@@ -37,6 +41,7 @@ class KexploreApp : Application() {
         connectionStore = ConnectionStore(this)
         resourceCache = ResourceCache(this)
         monitoringPreferences = MonitoringPreferences(this)
+        displayPreferences = DisplayPreferences(this)
         portForwardManager = PortForwardManager()
         NotificationHelper.createChannels(this)
         scheduleWidgetRefresh()

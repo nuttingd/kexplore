@@ -9,6 +9,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.tooling.preview.Preview
+import dev.nutting.kexplore.ui.theme.KexploreTextStyles
 
 @Preview
 @Composable
@@ -48,7 +49,12 @@ fun KeyValueRow(label: String, value: String, modifier: Modifier = Modifier) {
  * Displays a key-value pair inline in a horizontal layout.
  */
 @Composable
-fun InlineKeyValueRow(label: String, value: String, modifier: Modifier = Modifier) {
+fun InlineKeyValueRow(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+    isMonospace: Boolean = false,
+) {
     Row(modifier = modifier.padding(vertical = 2.dp)) {
         Text(
             text = "$label: ",
@@ -57,7 +63,7 @@ fun InlineKeyValueRow(label: String, value: String, modifier: Modifier = Modifie
         )
         Text(
             text = value,
-            style = MaterialTheme.typography.bodySmall,
+            style = if (isMonospace) KexploreTextStyles.uid else MaterialTheme.typography.bodySmall,
         )
     }
 }
