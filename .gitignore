@@ -14,3 +14,4 @@ keystore.properties
 *.keystore
 node_modules/
 gradle/gradle-daemon-jvm.properties
+/.plans/
